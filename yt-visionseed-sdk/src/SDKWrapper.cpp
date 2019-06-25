@@ -62,20 +62,20 @@ bool SDKWrapper::UpgradeFirmware(std::string path)
     return VSRPC_CALL(request, response);
 }
 
-bool SDKWrapper::SetCamAutoExposure(int32_t camId)
+bool SDKWrapper::SetCamAutoExposure(CameraID camId)
 {
     return SetCameraExposureParams(camId, CameraExposureParams_ExposureType_AUTO, 0, 0);
 }
 
-bool SDKWrapper::SetCamManualExposure(int32_t camId, int32_t timeUs, int32_t gain)
+bool SDKWrapper::SetCamManualExposure(CameraID camId, int32_t timeUs, int32_t gain)
 {
     return SetCameraExposureParams(camId, CameraExposureParams_ExposureType_MANUAL, timeUs, gain);
 }
 
-bool SDKWrapper::SetCameraExposureParams(int32_t camId, CameraExposureParams_ExposureType type, int32_t timeUs, int32_t gain)
+bool SDKWrapper::SetCameraExposureParams(CameraID camId, CameraExposureParams_ExposureType type, int32_t timeUs, int32_t gain)
 {
     VSRPC(request, setExposure, cameraExposureParams, response);
-    VSRPC_PARAM(request).cameraExposureParams.camId = camId;
+    VSRPC_PARAM(request).cameraExposureParams.camId = (int32_t)camId;
     VSRPC_PARAM(request).cameraExposureParams.type = type;
     if (type == CameraExposureParams_ExposureType_MANUAL) {
         VSRPC_PARAM(request).cameraExposureParams.has_timeUs = true;
@@ -104,10 +104,10 @@ bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
     return VSRPC_CALL(request, response);
 }
 
-// bool SDKWrapper::TakePicture(int32_t camId, int32_t mode, std::string pathHost)
+// bool SDKWrapper::TakePicture(CameraID camId, int32_t mode, std::string pathHost)
 // {
 //     VSRPC(request, takeRawPicture, intParams, response);
-//     VSRPC_PARAM(request).intParams = camId;
+//     VSRPC_PARAM(request).intParams = (int32_t)camId;
 //
 //     if ( VSRPC_CALL(request, response) ) {
 //         //return VSRPC_DATA(response).strData;

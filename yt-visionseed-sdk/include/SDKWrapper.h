@@ -20,6 +20,12 @@
 #define REGISTER_CALLBACK(vs_rpc)   messenger->RegisterCallback(YtRpc_Function_##vs_rpc, &SDKWrapper::Process##vs_rpc##Msg)
 #define DEFINE_CALLBACK(vs_rpc)     void SDKWrapper::Process##vs_rpc##Msg(shared_ptr<YtMsg> message)
 
+typedef enum
+{
+    CAMERA_RGB = 0,
+    CAMERA_IR,
+}CameraID;
+
 class SDKWrapper
 {
 public:
@@ -41,11 +47,11 @@ public:
     *       Camera
     */
     //int SetCameraParams();
-    bool SetCamAutoExposure(int32_t camId);
-    bool SetCamManualExposure(int32_t camId, int32_t timeUs, int32_t gain);
+    bool SetCamAutoExposure(CameraID camId);
+    bool SetCamManualExposure(CameraID camId, int32_t timeUs, int32_t gain);
     bool SetFlasher(int32_t flasherIR, int32_t flasherWhite);
     // bool SetCameraAIAbility(int32_t ability); // !!! Not implemented.
-    // bool TakePicture(int32_t camId, int32_t mode, std::string pathHost);
+    // bool TakePicture(CameraID camId, int32_t mode, std::string pathHost);
 
     // /*
     // *
@@ -69,7 +75,7 @@ private:
     static YtMessenger *messenger;
     static pb_byte_t* mBuffer;
 
-    bool SetCameraExposureParams(int32_t camId, CameraExposureParams_ExposureType type, int32_t timeUs, int32_t gain);
+    bool SetCameraExposureParams(CameraID camId, CameraExposureParams_ExposureType type, int32_t timeUs, int32_t gain);
 };
 
 #endif

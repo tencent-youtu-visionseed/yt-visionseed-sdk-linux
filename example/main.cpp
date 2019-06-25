@@ -13,7 +13,7 @@ void OnFaceRetrieveResult(shared_ptr<YtMsg> message)
     // (1)人脸框信息
     // (2)人脸的姿态信息roll pitch yaw
     // (3)根据眼部配准点计算眼睛的开闭状态，用来演示90点配准信息的使用
-    printf("frame: %lu\n", VSRESULT(message).frameId);
+    printf("frame: %lu, frameTimestampUs: %lu\n", VSRESULT(message).frameId, VSRESULT(message).frameTimestampUs);
     for (size_t i = 0; i < VSRESULT_DATA(message).faceDetectionResult.face_count; i++)
     {
         printf("face: %d/%d\n", (int)(i+1), VSRESULT_DATA(message).faceDetectionResult.face_count);

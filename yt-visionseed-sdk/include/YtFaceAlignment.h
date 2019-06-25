@@ -90,6 +90,7 @@ struct YtFaceShape
     cv::Point2f mouth            [YT_FACE_SHAPE_SIZE_MOUTH];
     cv::Point2f faceProfile      [YT_FACE_SHAPE_SIZE_PROFILE];
     cv::Point2f pupil            [YT_FACE_SHAPE_SIZE_PUPIL];
+    // 以下为对应配准点的可见性，一般可以认为<0.5即为该点被遮挡
     float leftEyebrowVisibility  [YT_FACE_SHAPE_SIZE_LEFT_EYEBROW];
     float rightEyebrowVisibility [YT_FACE_SHAPE_SIZE_RIGHT_EYEBROW];
     float leftEyeVisibility      [YT_FACE_SHAPE_SIZE_LEFT_EYE];
@@ -98,6 +99,8 @@ struct YtFaceShape
     float mouthEyebrowVisibility [YT_FACE_SHAPE_SIZE_MOUTH];
     float faceProfileVisibility  [YT_FACE_SHAPE_SIZE_PROFILE];
     float pupilVisibility        [YT_FACE_SHAPE_SIZE_PUPIL];
+    // 配准点的置信度，一般>0.5可以认为结果可靠
+    float confidence;
 };
 #pragma pack()
 

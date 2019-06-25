@@ -22,9 +22,9 @@ int GetYtFaceShape(Face *face, YtFaceShape &shape)
 {
     if (face->has_shape)
     {
-        if (sizeof(YtFaceShape) != YT_FACE_SHAPE_SIZE*(sizeof(cv::Point2f)+sizeof(float)))
+        if (sizeof(YtFaceShape) != YT_FACE_SHAPE_SIZE*(sizeof(cv::Point2f)+sizeof(float))+sizeof(float))
         {
-            LOG_E("[GetYtFaceShape] %lu != %lu\n", sizeof(YtFaceShape), YT_FACE_SHAPE_SIZE*(sizeof(cv::Point2f)+sizeof(float)));
+            LOG_E("[GetYtFaceShape] %lu != %lu\n", sizeof(YtFaceShape), YT_FACE_SHAPE_SIZE*(sizeof(cv::Point2f)+sizeof(float))+sizeof(float));
             return 0;
         }
         cv::Point2f *raw = (cv::Point2f *)&shape;
@@ -40,6 +40,8 @@ int GetYtFaceShape(Face *face, YtFaceShape &shape)
         {
             pVisibility[i] = face->shape.visibility[i];
         }
+        //
+        shape.confidence = face->shape.confidence;
         
         return 1;
     }
