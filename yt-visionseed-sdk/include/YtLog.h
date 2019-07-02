@@ -10,10 +10,10 @@
 #define YT_LOG_LEVEL_DEBUG 4
 
 #ifndef YT_LOG_LEVEL
-#define YT_LOG_LEVEL YT_LOG_LEVEL_ERR
+#define YT_LOG_LEVEL YT_LOG_LEVEL_WARN
 #endif
 
-#ifdef YTMSG_FULL
+#if defined(YTMSG_FULL) || defined(YTMSG_LITE)
     #define PRINTF printf
     #define USLEEP(us) usleep(us)
 #else

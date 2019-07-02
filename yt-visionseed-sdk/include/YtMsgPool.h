@@ -1,6 +1,5 @@
 //author: chenliang @ Youtu Lab, Tencent
 #include <pthread.h>
-#include <semaphore.h>
 
 #include "IDataLinkObserver.h"
 #include <queue>

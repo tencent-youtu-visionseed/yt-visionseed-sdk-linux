@@ -11,8 +11,11 @@
 #include "IDataLinkObserver.h"
 #include "DataLinkPosix.h"
 
-#include <sys/syscall.h>
-#define gettid() syscall(__NR_gettid)
+#if defined(ESP32)
+#else
+    #include <sys/syscall.h>
+    #define gettid() syscall(__NR_gettid)
+#endif
 
 #define TIMEOUT 10
 
@@ -24,7 +27,7 @@
 
 // RPC Call
 #define VSRPC(vs_request, vs_func, vs_params, vs_response)   \
-    std::shared_ptr<YtMsg> vs_request(new YtMsg(), [](YtMsg *p) { printf("[YtMsg rpc] release %p\n", p); pb_release(YtMsg_fields, p); delete p; });   \
+    std::shared_ptr<YtMsg> vs_request(new YtMsg(), [](YtMsg *p) { LOG_D("[YtMsg rpc] release %p\n", p); pb_release(YtMsg_fields, p); delete p; });   \
     vs_request->which_values = YtMsg_rpc_tag; \
     vs_request->values.rpc.func = VSPRC_FUNC_TYPE(vs_func); \
     vs_request->values.rpc.which_params = VSPRC_PARAM_TAG(vs_params); \
@@ -38,7 +41,7 @@
 
 // RPC Response
 #define VSRPC_RESPONSE(vs_response, vs_code, vs_data)   \
-    std::shared_ptr<YtMsg> vs_response(new YtMsg(), [](YtMsg *p) { printf("[YtMsg response] release %p\n", p); pb_release(YtMsg_fields, p); delete p; });   \
+    std::shared_ptr<YtMsg> vs_response(new YtMsg(), [](YtMsg *p) { LOG_D("[YtMsg response] release %p\n", p); pb_release(YtMsg_fields, p); delete p; });   \
     vs_response->which_values = YtMsg_response_tag; \
     vs_response->values.response.code = VSPRC_CODE(vs_code); \
     vs_response->values.response.which_data = VSPRC_DATA_TAG(vs_data)
@@ -88,7 +91,8 @@ private:
     sem_t mMsgProcessingSem;
     shared_ptr<YtMsg> mMsg;
 
-    sem_t mResponseSem;
+    sem_t mSengMsgSem;
+    sem_t mSengMsgResponseSem;
     shared_ptr<YtMsg> mResponse;
 
     //RpcCallback mRpcCallDispatcher;

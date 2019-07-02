@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <memory>
 #include <pthread.h>
-#include <semaphore.h>
 #include <sys/time.h>
 
 #include <pb_encode.h>
@@ -20,27 +19,33 @@
 #endif
 #include "YtLog.h"
 
-static YtMsgPool pool(3);
+static YtMsgPool pool(1);
 YtMsgPool *YtMsgPool::getInstance()
 {
     return &pool;
 }
 YtMsgPool::YtMsgPool(int size)
 {
-    if (sem_init(&mSem, 0, 0) != 0)
+#ifdef INC_FREERTOS_H
+    mSem = xSemaphoreCreateCounting(10, 1);
+#else
+    if (sem_init(&mSem, 0, 1) != 0)
     {
         LOG_E("[YtMsgPool] Error: sem_init failed\n");
     }
+#endif
     for (size_t i = 0; i < size; i++)
     {
         mPool.push_back(new YtMsg());
         mUsing.push_back(false);
     }
-    sem_post(&mSem);
 }
 YtMsgPool::~YtMsgPool()
 {
+#ifdef INC_FREERTOS_H
+#else
     sem_destroy (&mSem);
+#endif
 }
 std::shared_ptr<YtMsg> YtMsgPool::receive()
 {

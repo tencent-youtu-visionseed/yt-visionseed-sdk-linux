@@ -3,9 +3,12 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <inttypes.h>
 
-#include "SDKWrapper.h"
+#include "YtVisionSeed.h"
 #include "YtFaceAlignment.h"
+
+YtVisionSeed *visionseed;
 
 void OnFaceRetrieveResult(shared_ptr<YtMsg> message)
 {
@@ -13,7 +16,7 @@ void OnFaceRetrieveResult(shared_ptr<YtMsg> message)
     // (1)人脸框信息
     // (2)人脸的姿态信息roll pitch yaw
     // (3)根据眼部配准点计算眼睛的开闭状态，用来演示90点配准信息的使用
-    printf("frame: %lu, frameTimestampUs: %lu\n", VSRESULT(message).frameId, VSRESULT(message).frameTimestampUs);
+    printf("frame: %" PRIu64 ", frameTimestampUs: %" PRIu64 "\n", VSRESULT(message).frameId, VSRESULT(message).frameTimestampUs);
     for (size_t i = 0; i < VSRESULT_DATA(message).faceDetectionResult.face_count; i++)
     {
         printf("face: %d/%d\n", (int)(i+1), VSRESULT_DATA(message).faceDetectionResult.face_count);
@@ -52,15 +55,18 @@ void OnFaceRetrieveResult(shared_ptr<YtMsg> message)
             printf("leftEyeOpeness: %0.3f\n", leftEyeOpeness);
         }
     }
+
+    visionseed->SetFlasher( VSRESULT_DATA(message).faceDetectionResult.face_count == 0 ? 0 : 50, 0 );
+
     printf("\n");
 }
 
 int main(int argc, char **argv)
 {
-    SDKWrapper wrapper("/dev/ttyACM0");
+    visionseed = new YtVisionSeed("/dev/ttyACM0");
 
     //注册结果获取接口
-    wrapper.RegisterOnFaceResult(OnFaceRetrieveResult);
+    visionseed->RegisterOnFaceResult(OnFaceRetrieveResult);
     while ( true )
     {
         usleep(1000);

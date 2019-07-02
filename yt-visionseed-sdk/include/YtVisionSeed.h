@@ -17,8 +17,8 @@
 // #define DO_FACE_ALL         ( DO_FACE_TRACK | DO_FACE_FEATURE | DO_FACE_RETRIEVE | DO_FACE_SCORE | DO_FACE_LIVENESS | DO_FACE_GENDER | DO_FACE_AGE )
 
 #define DECLARE_CALLBACK(vs_rpc)    static void Process##vs_rpc##Msg(shared_ptr<YtMsg> message)
-#define REGISTER_CALLBACK(vs_rpc)   messenger->RegisterCallback(YtRpc_Function_##vs_rpc, &SDKWrapper::Process##vs_rpc##Msg)
-#define DEFINE_CALLBACK(vs_rpc)     void SDKWrapper::Process##vs_rpc##Msg(shared_ptr<YtMsg> message)
+#define REGISTER_CALLBACK(vs_rpc)   messenger->RegisterCallback(YtRpc_Function_##vs_rpc, &YtVisionSeed::Process##vs_rpc##Msg)
+#define DEFINE_CALLBACK(vs_rpc)     void YtVisionSeed::Process##vs_rpc##Msg(shared_ptr<YtMsg> message)
 
 typedef enum
 {
@@ -26,11 +26,11 @@ typedef enum
     CAMERA_IR,
 }CameraID;
 
-class SDKWrapper
+class YtVisionSeed
 {
 public:
-    virtual ~SDKWrapper();
-    SDKWrapper(const char* dev);
+    virtual ~YtVisionSeed();
+    YtVisionSeed(const char* dev);
 
     // DECLARE_CALLBACK(sendBlob);
 

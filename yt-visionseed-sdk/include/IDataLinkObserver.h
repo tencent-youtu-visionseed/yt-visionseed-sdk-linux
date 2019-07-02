@@ -6,7 +6,20 @@
 #define _GNU_SOURCE
 #endif
 #include <pthread.h>
-#include <semaphore.h>
+
+#if defined(ESP32)
+    #include <freertos/FreeRTOS.h>
+    #include <freertos/task.h>
+    #include <freertos/semphr.h>
+    #define sem_t SemaphoreHandle_t
+    #define sem_timedwait(sem, ts) (xSemaphoreTake(*sem, ((ts)->tv_sec*1000+(ts)->tv_nsec/1000000)/portTICK_PERIOD_MS)==pdTRUE ? 0 : -1)
+    #define sem_wait(sem) xSemaphoreTake(*sem, 1000/portTICK_PERIOD_MS)
+    #define sem_post(sem) xSemaphoreGive(*sem)
+    #define gettid() (long)xTaskGetCurrentTaskHandle()
+    #define getpid() 0
+#else
+    #include <semaphore.h>
+#endif
 
 #include <list>
 #include <memory>

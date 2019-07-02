@@ -5,10 +5,14 @@
 
 YtSubject::YtSubject()
 {
+#ifdef INC_FREERTOS_H
+    mObserversSem = xSemaphoreCreateCounting(10, 1);
+#else
     if (sem_init(&mObserversSem, 0, 1) != 0)
     {
         LOG_E("[YtSubject] Error: sem_init failed\n");
     }
+#endif
 }
 YtSubject::~YtSubject()
 {

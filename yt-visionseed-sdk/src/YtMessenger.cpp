@@ -4,7 +4,7 @@
 
 #define DEVICE_STATUS_BUSY      0x01
 
-YtMessenger::YtMessenger(const char* dev) : IObserver(), YtThread()
+YtMessenger::YtMessenger(const char* dev) : IObserver(), YtThread("YtMessenger"), mFaceResultCallback(NULL)
 {
     int instanceId = YtDataLinkPullPosix::createInstance(dev);
     YtDataLinkPushPosix::createInstance(YtDataLinkPullPosix::getInstance(instanceId));
@@ -12,6 +12,12 @@ YtMessenger::YtMessenger(const char* dev) : IObserver(), YtThread()
     YtDataLinkPullPosix::AttachAll(this);
 
     mMsg = NULL;
+#ifdef INC_FREERTOS_H
+    mMsgReadySem = xSemaphoreCreateCounting(10, 0);
+    mMsgProcessingSem = xSemaphoreCreateCounting(10, 1);
+    mSengMsgSem = xSemaphoreCreateCounting(1, 1);
+    mSengMsgResponseSem = xSemaphoreCreateCounting(10, 0);
+#else
     if (sem_init(&mMsgReadySem, 0, 0) != 0) {
         LOG_E("[YtMessenger] response semaphore init failed.\n");
     }
@@ -20,9 +26,14 @@ YtMessenger::YtMessenger(const char* dev) : IObserver(), YtThread()
         LOG_E("[YtMessenger] response semaphore init failed.\n");
     }
 
-    if (sem_init(&mResponseSem, 0, 0) != 0) {
+    if (sem_init(&mSengMsgSem, 0, 1) != 0) {
         LOG_E("[YtMessenger] response semaphore init failed.\n");
     }
+
+    if (sem_init(&mSengMsgResponseSem, 0, 0) != 0) {
+        LOG_E("[YtMessenger] response semaphore init failed.\n");
+    }
+#endif
 }
 
 YtMessenger::~YtMessenger()
@@ -59,23 +70,35 @@ void *YtMessenger::run()
 {
     LOG_D("[YtMessenger] messenger start, Pid: %d, tid: %ld.\n", getpid(), gettid());
 
-    while ( !shouldExit ) {
-        usleep(1000);
+    while ( !shouldExit )
+    {
         //LOG_D("[YtMessenger] Pid %d, tid %ld : asked for msg\n", getpid(), gettid());
-        //sem_wait(&mMsgReadySem); // wait for a new message
+        sem_wait(&mMsgReadySem); // wait for a new message
         //LOG_D("[YtMessenger] Pid %d, tid %ld : asked for resource\n", getpid(), gettid());
         sem_wait(&mMsgProcessingSem); // wait for processing resource
 
-        //LOG_D("[YtMessenger] Pid %d, tid %ld : msg is processing\n", getpid(), gettid());
+        // LOG_D("[YtMessenger] Pid %d, tid %ld : msg is processing\n", getpid(), gettid());
 
 
 
-        if ( mMsg ) {
-            DispatchMsg(mMsg);
+        if ( mMsg )
+        {
+            // LOG_D("[YtMessenger] Pid %d, tid %ld : recv result\n", getpid(), gettid());
+            switch (mMsg->values.result.which_data)
+            {
+            case YtResult_faceDetectionResult_tag:
+                if (mFaceResultCallback != NULL)
+                {
+                    mFaceResultCallback(mMsg);
+                }
+                break;
+            }
+            // DispatchMsg(mMsg);
             mMsg = NULL;
         }
 
-        if ( mMsg ){
+        if ( mMsg )
+        {
             LOG_D("[YtMessenger] msg is not null, Pid: %d, tid: %ld.\n", getpid(), gettid());
         }
 
@@ -96,6 +119,8 @@ void *YtMessenger::run()
 
 shared_ptr<YtMsg> YtMessenger::SendMsg(shared_ptr<YtMsg> message)
 {
+    sem_wait(&mSengMsgSem);
+
     LOG_D("[YtMessenger::SendMsg] Pid %d, tid %ld : send msg\n", getpid(), gettid());
 
     mResponse = NULL;
@@ -109,18 +134,23 @@ shared_ptr<YtMsg> YtMessenger::SendMsg(shared_ptr<YtMsg> message)
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec += TIMEOUT;
     ts.tv_nsec = 0;
-    int ret = sem_timedwait(&mResponseSem, &ts);
-    if ( ret == 0 ) {
+    shared_ptr<YtMsg> response;
+    int ret = sem_timedwait(&mSengMsgResponseSem, &ts);
+    if ( ret == 0 )
+    {
+        response = mResponse;
         //LOG_D("[YtMessenger] response received.\n");
         LOG_D("[YtMessenge::SendMsgr] Pid %d, tid %ld : recv response\n", getpid(), gettid());
-        return mResponse;
+    }
+    else
+    {
+        LOG_W("[YtMessenger::SendMsg] no response received.\n");
     }
 
-    LOG_D("[YtMessenger::SendMsg] no response received.\n");
     mResponse = NULL;
 
-    return mResponse;
-
+    sem_post(&mSengMsgSem);
+    return response;
 }
 
 // void YtMessenger::PostSuccResponseMsg()
@@ -158,43 +188,37 @@ void YtMessenger::Update(int instanceId, shared_ptr<YtMsg> message)
     // dispatch rpc & result msg
     int svalProcessing=0;
     int svalResponse=0;
+#ifdef INC_FREERTOS_H
+    svalProcessing = uxSemaphoreGetCount(mMsgProcessingSem);
+    svalResponse = uxSemaphoreGetCount(mSengMsgResponseSem);
+#else
     sem_getvalue(&mMsgProcessingSem, &svalProcessing);
-    sem_getvalue(&mResponseSem, &svalResponse);
-
+    sem_getvalue(&mSengMsgResponseSem, &svalResponse);
+#endif
     // LOG_D("[YtMessenger] Pid %d, tid %ld : svalProcessing: %d, svalResponse: %d\n", getpid(), gettid(), svalProcessing, svalResponse);
 
     switch ( message->which_values )
     {
     case YtMsg_rpc_tag:
+        break;
+
+    case YtMsg_result_tag:
         if ( svalProcessing == 0 ) {// is processing
+            // too fast, drop result
             // PostFailResponseMsg(DEVICE_STATUS_BUSY);
-            LOG_D("[YtMessenger] Pid %d, tid %ld : device is busy\n", getpid(), gettid());
+            LOG_W("[YtMessenger] dropped result\n");
         }
         else { // idle
             mMsg = message;
             sem_post(&mMsgReadySem);
             LOG_D("[YtMessenger] Pid %d, tid %ld : msg is ready\n", getpid(), gettid());
         }
-
-        break;
-
-    case YtMsg_result_tag:
-        // LOG_D("[YtMessenger] Pid %d, tid %ld : recv result\n", getpid(), gettid());
-        switch (message->values.result.which_data)
-        {
-        case YtResult_faceDetectionResult_tag:
-            if (mFaceResultCallback != NULL)
-            {
-                mFaceResultCallback(message);
-            }
-            break;
-        }
         break;
 
     case YtMsg_response_tag:
         mResponse = message;
         if ( svalResponse == 0 ) {
-            sem_post(&mResponseSem);
+            sem_post(&mSengMsgResponseSem);
         }
 
         LOG_D("[YtMessenger] Pid %d, tid %ld : recv response\n", getpid(), gettid());
@@ -240,7 +264,7 @@ bool YtMessenger::SendFilePart(std::string pathVS, size_t totalLength, const uin
     VSRPC_PARAM(request).filePart.data->size = length;
     memcpy(VSRPC_PARAM(request).filePart.data->bytes, blobBuf, length);
 
-    LOG_D("[SendFilePart] sending: %lu/%lu\n", offset + length, totalLength);
+    LOG_D("[SendFilePart] sending: %lu/%lu\n", (long)(offset + length), (long)totalLength);
     bool ret = VSRPC_CALL2(request, response);
     if (!ret && response)
     {

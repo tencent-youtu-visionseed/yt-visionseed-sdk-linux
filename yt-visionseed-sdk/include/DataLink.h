@@ -6,7 +6,7 @@
 
 #include "YtLog.h"
 
-#ifdef YTMSG_FULL
+#if defined(YTMSG_FULL)
     #define CONST const
     #define ACCESS_CONST(x) (x)
 
@@ -17,6 +17,17 @@
 
     #define YTDATALINK_RECV_BUF_SIZE 8192
     #define YTDATALINK_SEND_BUF_SIZE 4096
+#elif defined(YTMSG_LITE)
+    #define CONST const
+    #define ACCESS_CONST(x) (x)
+
+    #define MAX_BLOB_BUF 10240
+    //TODO: nanopb的YtMsg_size有bug：存在oneof修饰时，用了sizeof(union{})来计算，编译器不支持
+    #undef YtMsg_size
+    #define YtMsg_size (MAX_BLOB_BUF + sizeof(YtMsg))
+
+    #define YTDATALINK_RECV_BUF_SIZE 256
+    #define YTDATALINK_SEND_BUF_SIZE 256
 #else
     #include <avr/pgmspace.h>
     #define CONST const PROGMEM

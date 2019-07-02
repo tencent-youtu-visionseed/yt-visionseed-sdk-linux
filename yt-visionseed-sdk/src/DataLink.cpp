@@ -53,7 +53,7 @@ YtMsg *YtDataLink::recvRunOnce()
             {
                 if (mStatus != YT_DL_IDLE)
                 {
-                    LOG_E("[YtMsg] unfinished pkg(%lu/%d) %d crc 0x%04x ?= 0x%04x\n", mBufi, mMsgLen, mStatus, mCrcCalc, mCrc);
+                    LOG_E("[YtMsg] unfinished pkg(%lu/%d) %d crc 0x%04x ?= 0x%04x\n", (long)mBufi, mMsgLen, mStatus, mCrcCalc, mCrc);
                 }
                 mStatus = YT_DL_LEN1_PENDING;
             }
@@ -90,7 +90,7 @@ YtMsg *YtDataLink::recvRunOnce()
                         {
                             if (mMsgLen > sizeof(mBuf))
                             {
-                                LOG_E("[YtMsg] Error: msg len %d > %lu\n", mMsgLen, sizeof(mBuf));
+                                LOG_E("[YtMsg] Error: msg len %d > %lu\n", mMsgLen, (long)sizeof(mBuf));
                                 mStatus = YT_DL_IDLE;
                                 return NULL;
                             }
@@ -142,7 +142,7 @@ YtMsg *YtDataLink::recvRunOnce()
                                 {
                                     mTrans = false;
                                     mStatus = YT_DL_LEN1_PENDING;
-                                    LOG_D("[YtMsg] unfinished pkg(%lu/%d)\n", mBufi, mMsgLen);
+                                    LOG_D("[YtMsg] unfinished pkg(%lu/%d)\n", (long)mBufi, mMsgLen);
                                     //buf, bufStart, bufRemain下一轮会继续使用
                                     return NULL;
                                 }
@@ -192,9 +192,8 @@ YtMsg *YtDataLink::recvRunOnce()
                                 mStatus = YT_DL_IDLE;
                                 #ifdef __rtems__
                                     LOG_D("[YtMsg] recv %s msg: %d\n", (message->which_values == YtMsg_rpc_tag ? "rpc" : ""), (message->which_values == YtMsg_rpc_tag ? message->values.rpc.func : -1));
-                                #endif
-                                #if defined(ARDUINO_ARCH_STM32)
-                                    // LOG_D("\n[YtMsg] len=%d\n", mMsgLen);
+                                #else
+                                    LOG_D("[YtMsg] recv len=%d\n", mMsgLen);
                                 #endif
                                 return message;
                             }

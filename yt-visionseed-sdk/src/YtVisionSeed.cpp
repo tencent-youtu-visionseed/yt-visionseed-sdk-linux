@@ -2,12 +2,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "SDKWrapper.h"
+#include "YtVisionSeed.h"
 
-YtMessenger* SDKWrapper::messenger = NULL;
-pb_byte_t* SDKWrapper::mBuffer = NULL;
+YtMessenger* YtVisionSeed::messenger = NULL;
+pb_byte_t* YtVisionSeed::mBuffer = NULL;
 
-SDKWrapper::SDKWrapper(const char* dev)
+YtVisionSeed::YtVisionSeed(const char* dev)
 {
     if ( messenger ) {
         delete(messenger);
@@ -17,22 +17,22 @@ SDKWrapper::SDKWrapper(const char* dev)
     // REGISTER_CALLBACK(sendBlob);
     messenger->startLoop();
 
-    LOG_D("[SDKWrapper] initialized.\n");
+    LOG_D("[YtVisionSeed] initialized.\n");
 }
 
-SDKWrapper::~SDKWrapper()
+YtVisionSeed::~YtVisionSeed()
 {
-    LOG_D("[SDKWrapper] releasing, Pid: %d, tid: %ld.\n", getpid(), gettid());
+    LOG_D("[YtVisionSeed] releasing, Pid: %d, tid: %ld.\n", getpid(), gettid());
 
     if ( messenger != NULL ) {
         messenger->exitLoop();
         delete(messenger);
         messenger = NULL;
     }
-    LOG_D("[SDKWrapper] released.\n");
+    LOG_D("[YtVisionSeed] released.\n");
 }
 
-std::string SDKWrapper::GetDeviceInfo()
+std::string YtVisionSeed::GetDeviceInfo()
 {
     VSRPC(request, getDeviceInfo, intParams, response);
 
@@ -47,7 +47,7 @@ std::string SDKWrapper::GetDeviceInfo()
     }
 }
 
-bool SDKWrapper::UpgradeFirmware(std::string path)
+bool YtVisionSeed::UpgradeFirmware(std::string path)
 {
     // send file & do upgrade
     std::string remotePath = "/tmp/fw.bin";
@@ -62,17 +62,17 @@ bool SDKWrapper::UpgradeFirmware(std::string path)
     return VSRPC_CALL(request, response);
 }
 
-bool SDKWrapper::SetCamAutoExposure(CameraID camId)
+bool YtVisionSeed::SetCamAutoExposure(CameraID camId)
 {
     return SetCameraExposureParams(camId, CameraExposureParams_ExposureType_AUTO, 0, 0);
 }
 
-bool SDKWrapper::SetCamManualExposure(CameraID camId, int32_t timeUs, int32_t gain)
+bool YtVisionSeed::SetCamManualExposure(CameraID camId, int32_t timeUs, int32_t gain)
 {
     return SetCameraExposureParams(camId, CameraExposureParams_ExposureType_MANUAL, timeUs, gain);
 }
 
-bool SDKWrapper::SetCameraExposureParams(CameraID camId, CameraExposureParams_ExposureType type, int32_t timeUs, int32_t gain)
+bool YtVisionSeed::SetCameraExposureParams(CameraID camId, CameraExposureParams_ExposureType type, int32_t timeUs, int32_t gain)
 {
     VSRPC(request, setExposure, cameraExposureParams, response);
     VSRPC_PARAM(request).cameraExposureParams.camId = (int32_t)camId;
@@ -87,7 +87,7 @@ bool SDKWrapper::SetCameraExposureParams(CameraID camId, CameraExposureParams_Ex
     return VSRPC_CALL(request, response);
 }
 
-bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
+bool YtVisionSeed::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 {
     VSRPC(request, setFlasher, flasherParams, response);
 
@@ -104,17 +104,17 @@ bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
     return VSRPC_CALL(request, response);
 }
 
-// bool SDKWrapper::TakePicture(CameraID camId, int32_t mode, std::string pathHost)
+// bool YtVisionSeed::TakePicture(CameraID camId, int32_t mode, std::string pathHost)
 // {
 //     VSRPC(request, takeRawPicture, intParams, response);
 //     VSRPC_PARAM(request).intParams = (int32_t)camId;
 //
 //     if ( VSRPC_CALL(request, response) ) {
 //         //return VSRPC_DATA(response).strData;
-//         LOG_D("[SDKWrapper] take photo success.\n");
+//         LOG_D("[YtVisionSeed] take photo success.\n");
 //     }
 //     else {
-//         LOG_E("[SDKWrapper] take photo failed.\n");
+//         LOG_E("[YtVisionSeed] take photo failed.\n");
 //     }
 // }
 
@@ -122,7 +122,7 @@ bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 // *
 // *       AI
 // */
-// bool SDKWrapper::SetFaceAIAbility(int32_t ability)
+// bool YtVisionSeed::SetFaceAIAbility(int32_t ability)
 // {
 //     VSRPC(request, setFaceAIAbility, intParams, response);
 //     VSRPC_PARAM(request).intParams = ability;
@@ -135,7 +135,7 @@ bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 // *       Face Feature Database
 // */
 //
-// std::string SDKWrapper::GetFaceLibsInfo()
+// std::string YtVisionSeed::GetFaceLibsInfo()
 // {
 //     VSRPC(request, getFaceLibsInfo, intParams, response);
 //
@@ -147,7 +147,7 @@ bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 //     }
 // }
 //
-// bool SDKWrapper::ClearFaceLibs()
+// bool YtVisionSeed::ClearFaceLibs()
 // {
 //     VSRPC(request, clearFaceLibs, intParams, response);
 //
@@ -155,7 +155,7 @@ bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 // }
 //
 
-// bool SDKWrapper::RegisterFaceIdWithPic(std::string path, std::string faceId)
+// bool YtVisionSeed::RegisterFaceIdWithPic(std::string path, std::string faceId)
 // {
 //     // send file & do register
 //     std::size_t extPos = path.rfind(".");
@@ -178,7 +178,7 @@ bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 //     return VSRPC_CALL(request, response);
 // }
 //
-// bool SDKWrapper::RegisterFaceIdFromCamera(std::string faceId)
+// bool YtVisionSeed::RegisterFaceIdFromCamera(std::string faceId)
 // {
 //     VSRPC(request, registerFaceIdFromCamera, strParams, response);
 //     strcpy(VSRPC_PARAM(request).strParams, faceId.c_str());
@@ -186,13 +186,13 @@ bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 //     return VSRPC_CALL(request, response);
 // }
 
-// bool SDKWrapper::VerifyFaceWithPic(std::string path, int32_t libId, std::string faceId)
+// bool YtVisionSeed::VerifyFaceWithPic(std::string path, int32_t libId, std::string faceId)
 // {
 //     // send file & do verify
 //     return messenger->SendFile(BlobParams_BlobType_FACEVERIFY, path, libId, faceId);
 // }
 //
-// bool SDKWrapper::DeleteFaceId(std::string faceId)
+// bool YtVisionSeed::DeleteFaceId(std::string faceId)
 // {
 //     VSRPC(request, deleteFaceId, strParams, response);
 //     strcpy(VSRPC_PARAM(request).strParams, faceId.c_str());
@@ -200,7 +200,7 @@ bool SDKWrapper::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 //     return VSRPC_CALL(request, response);
 // }
 
-void SDKWrapper::RegisterOnFaceResult(OnResult callback)
+void YtVisionSeed::RegisterOnFaceResult(OnResult callback)
 {
     messenger->RegisterOnFaceResult(callback);
 }

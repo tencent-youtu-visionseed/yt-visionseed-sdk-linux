@@ -6,7 +6,6 @@
 #define _GNU_SOURCE
 #endif
 #include <pthread.h>
-#include <semaphore.h>
 
 #include "DataLink.h"
 #include "IDataLinkObserver.h"
@@ -28,7 +27,8 @@ public:
 protected:
     volatile bool shouldExit;
     pthread_t thread;
-    YtThread();
+    YtThread(const char *name);
+    const char *mName;
     virtual ~YtThread();
     void start();
     virtual void *run() = 0;

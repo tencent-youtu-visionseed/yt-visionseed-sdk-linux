@@ -20,8 +20,12 @@
 #include <Flic.h>
 #endif
 
+#ifdef INC_FREERTOS_H
+#include "DataLinkESP32.h"
+#else
 #include <termios.h>
 #include <unistd.h>
+#endif
 
 vector<YtDataLinkPullPosix *> YtDataLinkPullPosix::mInstance;
 
@@ -50,8 +54,14 @@ void YtDataLinkPullPosix::DetachAll(IObserver *p)
         mInstance[i]->Attach(p);
     }
 }
-YtDataLinkPullPosix::YtDataLinkPullPosix(const char *dev) : YtSubject(), YtThread(), YtDataLink(new YtSerialPortPosix(dev))
+YtDataLinkPullPosix::YtDataLinkPullPosix(const char *dev) : YtSubject(), YtThread("YtDataLinkPull"), YtDataLink(NULL)
 {
+#ifdef INC_FREERTOS_H
+    mPort = (new YtSerialPortESP32(dev));
+#else
+    mPort = (new YtSerialPortPosix(dev));
+#endif
+
     start();
 }
 YtDataLinkPullPosix::~YtDataLinkPullPosix()
@@ -59,11 +69,6 @@ YtDataLinkPullPosix::~YtDataLinkPullPosix()
 }
 void *YtDataLinkPullPosix::run()
 {
-#ifdef __rtems__
-    rtems_object_set_name(pthread_self(), "YtDataLinkPull"); //for moviDebug
-#endif
-    pthread_setname_np(pthread_self(), "YtDataLinkPull"); //for rtems ps
-
     while (!shouldExit)
     {
         YtMsg *msg = recvRunOnce();
@@ -107,12 +112,16 @@ void YtDataLinkPushPosix::broadcastYtMsgAsync(shared_ptr<YtMsg> msg)
         mInstance[i]->sendYtMsgAsync(msg);
     }
 }
-YtDataLinkPushPosix::YtDataLinkPushPosix(YtDataLink *dev) : YtThread()
+YtDataLinkPushPosix::YtDataLinkPushPosix(YtDataLink *dev) : YtThread("YtDataLinkPush")
 {
+#ifdef INC_FREERTOS_H
+    mUpdateSem = xSemaphoreCreateCounting(10, 1);
+#else
     if (sem_init(&mUpdateSem, 0, 1) != 0)
     {
         LOG_E("[YtDataLink] Error: sem_init failed\n");
     }
+#endif
     mDev = dev;
     //发送
     start();
@@ -151,11 +160,6 @@ void YtDataLinkPushPosix::sendResponseAsync(YtRpcResponse_ReturnCode code, bool 
 
 void *YtDataLinkPushPosix::run()
 {
-#ifdef __rtems__
-    rtems_object_set_name(pthread_self(), "YtDataLinkPush"); //for moviDebug
-#endif
-    pthread_setname_np(pthread_self(), "YtDataLinkPush"); //for rtems ps
-
     while (!shouldExit)
     {
         sem_wait(&mUpdateSem);
@@ -170,8 +174,9 @@ void *YtDataLinkPushPosix::run()
         {
             mDev->sendYtMsg(msg.get());
         }
-        usleep(100);
+        usleep(10000);
     }
+    return NULL;
 }
 
 
@@ -186,7 +191,7 @@ void *YtThread::threadFunc(void *args)
     LOG_D("YtThread finished %p\n", yt);
     return ret;
 }
-YtThread::YtThread()
+YtThread::YtThread(const char *name) : mName(name)
 {
 }
 YtThread::~YtThread()
@@ -211,18 +216,27 @@ void YtThread::start()
         return;
     }
 #endif
+#ifndef INC_FREERTOS_H
     ret = pthread_attr_setschedpolicy (&attr, SCHED_RR);
     if (0 != ret)
     {
         LOG_E("pthread_attr_set_schedule_policy error %d\n", ret);
         return;
     }
+#endif
     ret = pthread_create(&thread, &attr, threadFunc, this);
     if (0 != ret)
     {
         LOG_E("pthread_create error %d\n", ret);
         return;
     }
+#ifdef __rtems__
+    rtems_object_set_name(thread, mName); //for moviDebug
+#endif
+#ifndef INC_FREERTOS_H
+    pthread_setname_np(thread, mName); //for rtems ps
+#endif
+
     ret = pthread_attr_destroy(&attr);
     if (0 != ret)
     {
@@ -259,11 +273,14 @@ int YtSerialPortPosix::open()
 {
     mPortFd = ::open(mDev, O_RDWR);
     if (mPortFd < 0) {
-        LOG_E("[YtDataLink] Error opening %s, %d\n", mDev, errno);
+        #ifndef INC_FREERTOS_H
+            LOG_E("[YtDataLink] Error opening %s, %d\n", mDev, errno);
+        #endif
         usleep(100000);
         return 0;
     }
     //有一些特殊的usb-serial设备（比如stm32 usb-serial）默认会设置标志位，将发送的0x0a变成0x0d, 0x0a
+#if !defined(INC_FREERTOS_H)
     struct termios options;
     if (tcgetattr(mPortFd, &options) != -1)
     {
@@ -280,6 +297,7 @@ int YtSerialPortPosix::open()
         cfmakeraw(&options);
         tcsetattr(mPortFd, TCSANOW, &options);
     }
+#endif
     LOG_D("[YtDataLink] %s opened: %d\n", mDev, mPortFd);
     return 1;
 }
@@ -296,7 +314,7 @@ int YtSerialPortPosix::close()
 int YtSerialPortPosix::read(void *buffer, size_t len)
 {
     int rv;
-#ifndef __rtems__
+#if !defined(__rtems__) && !defined(INC_FREERTOS_H)
     fd_set set;
     struct timeval timeout;
     FD_ZERO(&set); /* clear the set */
