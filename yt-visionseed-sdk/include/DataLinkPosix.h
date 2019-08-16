@@ -27,8 +27,8 @@ public:
 protected:
     volatile bool shouldExit;
     pthread_t thread;
-    YtThread(const char *name);
-    const char *mName;
+    string mName;
+    YtThread(string name);
     virtual ~YtThread();
     void start();
     virtual void *run() = 0;
@@ -69,6 +69,7 @@ public:
     virtual ~YtDataLinkPushPosix();
     virtual void sendYtMsgAsync(shared_ptr<YtMsg> msg);
     virtual void sendResponseAsync(YtRpcResponse_ReturnCode code, bool has_sequenceId, int32_t sequenceId);
+    virtual void sendResponseWithIntDataAsync(YtRpcResponse_ReturnCode code, int intData, bool has_sequenceId, int32_t sequenceId);
 protected:
     YtDataLink *mDev;
     static vector<YtDataLinkPushPosix *> mInstance;

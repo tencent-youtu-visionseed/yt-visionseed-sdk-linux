@@ -17,6 +17,9 @@ YtVisionSeed::YtVisionSeed(const char* dev)
     // REGISTER_CALLBACK(sendBlob);
     messenger->startLoop();
 
+    //等待读取清空VS上的发送队列，避免后续RPC请求回复失败
+    usleep(50000);
+
     LOG_D("[YtVisionSeed] initialized.\n");
 }
 
@@ -103,6 +106,22 @@ bool YtVisionSeed::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 
     return VSRPC_CALL(request, response);
 }
+void YtVisionSeed::SetFlasherAsync(int32_t flasherIR, int32_t flasherWhite)
+{
+    VSRPC(request, setFlasher, flasherParams, response);
+
+    if ( flasherIR>=0 ) {
+        VSRPC_PARAM(request).flasherParams.has_ir = true;
+        VSRPC_PARAM(request).flasherParams.ir = flasherIR;
+    }
+
+    if ( flasherWhite>=0 ) {
+        VSRPC_PARAM(request).flasherParams.has_white = true;
+        VSRPC_PARAM(request).flasherParams.white = flasherWhite;
+    }
+
+    VSRPC_CALL_ASYNC(request);
+}
 
 // bool YtVisionSeed::TakePicture(CameraID camId, int32_t mode, std::string pathHost)
 // {
@@ -146,59 +165,110 @@ bool YtVisionSeed::SetFlasher(int32_t flasherIR, int32_t flasherWhite)
 //         return "";
 //     }
 // }
-//
-// bool YtVisionSeed::ClearFaceLibs()
-// {
-//     VSRPC(request, clearFaceLibs, intParams, response);
-//
-//     return VSRPC_CALL(request, response);
-// }
-//
 
-// bool YtVisionSeed::RegisterFaceIdWithPic(std::string path, std::string faceId)
-// {
-//     // send file & do register
-//     std::size_t extPos = path.rfind(".");
-//     if (extPos == std::string::npos)
-//     {
-//         return false;
-//     }
-//     std::string ext = path.substr(extPos);
-//     std::string remotePath = std::string("/tmp/") + faceId + ext;
-//     LOG_D("remotePath = %s\n", remotePath.c_str());
-//     if (!messenger->SendFile(path, remotePath.c_str()))
-//     {
-//         return false;
-//     }
-//
-//     VSRPC(request, registerFaceIdWithPic, registerFaceIdWithPicParams, response);
-//     strcpy(VSRPC_PARAM(request).registerFaceIdWithPicParams.filePath, remotePath.c_str());
-//     strcpy(VSRPC_PARAM(request).registerFaceIdWithPicParams.faceId, faceId.c_str());
-//
-//     return VSRPC_CALL(request, response);
-// }
-//
-// bool YtVisionSeed::RegisterFaceIdFromCamera(std::string faceId)
-// {
-//     VSRPC(request, registerFaceIdFromCamera, strParams, response);
-//     strcpy(VSRPC_PARAM(request).strParams, faceId.c_str());
-//
-//     return VSRPC_CALL(request, response);
-// }
+bool YtVisionSeed::ClearFaceLib()
+{
+    VSRPC(request, clearFaceLib, intParams, response);
 
-// bool YtVisionSeed::VerifyFaceWithPic(std::string path, int32_t libId, std::string faceId)
-// {
-//     // send file & do verify
-//     return messenger->SendFile(BlobParams_BlobType_FACEVERIFY, path, libId, faceId);
-// }
-//
-// bool YtVisionSeed::DeleteFaceId(std::string faceId)
-// {
-//     VSRPC(request, deleteFaceId, strParams, response);
-//     strcpy(VSRPC_PARAM(request).strParams, faceId.c_str());
-//
-//     return VSRPC_CALL(request, response);
-// }
+    return VSRPC_CALL(request, response);
+}
+
+int32_t YtVisionSeed::RegisterFaceIdWithPic(std::string path, std::string faceName)
+{
+    // send file & do register
+    std::size_t extPos = path.rfind(".");
+    if (extPos == std::string::npos)
+    {
+        return -1;
+    }
+    std::string ext = path.substr(extPos);
+    std::string remotePath = std::string("/tmp/reg") + ext;
+    LOG_D("remotePath = %s\n", remotePath.c_str());
+    if (!messenger->SendFile(path, remotePath.c_str()))
+    {
+        return -1;
+    }
+
+    VSRPC(request, registerFaceIdWithPic, registerFaceIdWithPicParams, response);
+    strcpy(VSRPC_PARAM(request).registerFaceIdWithPicParams.filePath, remotePath.c_str());
+    strcpy(VSRPC_PARAM(request).registerFaceIdWithPicParams.faceName, faceName.c_str());
+
+    if (!VSRPC_CALL(request, response))
+    {
+        return -1;
+    }
+    return response->values.response.data.intData;
+}
+
+int32_t YtVisionSeed::RegisterFaceIdFromCamera(std::string faceName)
+{
+    VSRPC(request, registerFaceIdFromCamera, strParams, response);
+    strcpy(VSRPC_PARAM(request).strParams, faceName.c_str());
+
+    if (!VSRPC_CALL(request, response))
+    {
+        return -1;
+    }
+    return response->values.response.data.intData;
+}
+
+bool YtVisionSeed::DeleteFaceId(int32_t faceId)
+{
+    VSRPC(request, deleteFaceId, intParams, response);
+    VSRPC_PARAM(request).intParams = faceId;
+
+    return VSRPC_CALL(request, response);
+}
+
+int32_t YtVisionSeed::DeleteFaceName(std::string faceName)
+{
+    VSRPC(request, deleteFaceName, strParams, response);
+    strcpy(VSRPC_PARAM(request).strParams, faceName.c_str());
+
+    if (!VSRPC_CALL(request, response))
+    {
+        return -1;
+    }
+    return response->values.response.data.intData;
+}
+
+std::vector<FaceIdInfo> YtVisionSeed::ListFaceId()
+{
+    int faceListBegin = 0;
+    std::vector<FaceIdInfo> faces;
+    while (true)
+    {
+        VSRPC(request, listFaceId, listFaceIdParams, response);
+        VSRPC_PARAM(request).listFaceIdParams.start = faceListBegin;
+        VSRPC_PARAM(request).listFaceIdParams.length = 100;
+
+        if (!VSRPC_CALL(request, response))
+        {
+            break;
+        }
+        if (response->values.response.data.faceIdListData.faces_count == 0)
+        {
+            break;
+        }
+        for (size_t i = 0; i < response->values.response.data.faceIdListData.faces_count; i++)
+        {
+            FaceIdInfo &info = response->values.response.data.faceIdListData.faces[i];
+            faces.push_back( info );
+        }
+
+        faceListBegin = faces[faces.size() - 1].faceId + 1;
+    }
+
+    return faces;
+}
+
+bool YtVisionSeed::SetFaceName(int32_t faceId, std::string faceName)
+{
+    VSRPC(request, setFaceId, setFaceIdParams, response);
+    VSRPC_PARAM(request).setFaceIdParams.faceId = faceId;
+    strcpy(VSRPC_PARAM(request).setFaceIdParams.faceName, faceName.c_str());
+    return VSRPC_CALL(request, response);
+}
 
 void YtVisionSeed::RegisterOnFaceResult(OnResult callback)
 {

@@ -39,6 +39,9 @@
 #define VSRPC_CALL2(vs_request, vs_response)       \
     ( vs_response = SendMsg(vs_request), (vs_response && (vs_response->values.response.code == YtRpcResponse_ReturnCode_SUCC || vs_response->values.response.code == YtRpcResponse_ReturnCode_CONTINUE)) )
 
+#define VSRPC_CALL_ASYNC(vs_request)       \
+    ( messenger->PostMsg(vs_request) )
+
 // RPC Response
 #define VSRPC_RESPONSE(vs_response, vs_code, vs_data)   \
     std::shared_ptr<YtMsg> vs_response(new YtMsg(), [](YtMsg *p) { LOG_D("[YtMsg response] release %p\n", p); pb_release(YtMsg_fields, p); delete p; });   \

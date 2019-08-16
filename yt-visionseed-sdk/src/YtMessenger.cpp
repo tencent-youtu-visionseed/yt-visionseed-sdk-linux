@@ -109,13 +109,13 @@ void *YtMessenger::run()
     return NULL;
 }
 
-//void YtMessenger::PostMsg(shared_ptr<YtMsg> message)
-//{
-//    YtDataLinkPushPosix::getInstance()->sendYtMsgAsync(message);
-//    usleep(10000);
-//    LOG_D("[YtMessenger] request posted.\n");
-//    LOG_D("[YtMessenger] Pid: %d, tid: %ld.\n", getpid(), gettid());
-//}
+void YtMessenger::PostMsg(shared_ptr<YtMsg> message)
+{
+   YtDataLinkPushPosix::getInstance(0)->sendYtMsgAsync(message);
+   usleep(10000);
+   LOG_D("[YtMessenger] request posted.\n");
+   LOG_D("[YtMessenger] Pid: %d, tid: %ld.\n", getpid(), gettid());
+}
 
 shared_ptr<YtMsg> YtMessenger::SendMsg(shared_ptr<YtMsg> message)
 {
@@ -188,12 +188,15 @@ void YtMessenger::Update(int instanceId, shared_ptr<YtMsg> message)
     // dispatch rpc & result msg
     int svalProcessing=0;
     int svalResponse=0;
+    int svalSending=0;
 #ifdef INC_FREERTOS_H
     svalProcessing = uxSemaphoreGetCount(mMsgProcessingSem);
     svalResponse = uxSemaphoreGetCount(mSengMsgResponseSem);
+    svalSending = uxSemaphoreGetCount(mSengMsgSem);
 #else
     sem_getvalue(&mMsgProcessingSem, &svalProcessing);
     sem_getvalue(&mSengMsgResponseSem, &svalResponse);
+    sem_getvalue(&mSengMsgSem, &svalSending);
 #endif
     // LOG_D("[YtMessenger] Pid %d, tid %ld : svalProcessing: %d, svalResponse: %d\n", getpid(), gettid(), svalProcessing, svalResponse);
 
@@ -216,8 +219,13 @@ void YtMessenger::Update(int instanceId, shared_ptr<YtMsg> message)
         break;
 
     case YtMsg_response_tag:
-        mResponse = message;
+        if (svalSending == 1) {
+            LOG_D("[YtMessenger] response received, but no rpc calls!\n");
+            break;
+        }
         if ( svalResponse == 0 ) {
+            LOG_D("[YtMessenger] response received.\n");
+            mResponse = message;
             sem_post(&mSengMsgResponseSem);
         }
 

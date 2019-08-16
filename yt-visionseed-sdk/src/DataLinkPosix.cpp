@@ -138,17 +138,22 @@ void YtDataLinkPushPosix::sendYtMsgAsync(shared_ptr<YtMsg> msg)
     }
     else
     {
-        LOG_W("[YtDataLink] msg sending queue full, skipping\n");
+        LOG_I("[YtDataLink] msg sending queue full, skipping\n");
     }
     sem_post(&mUpdateSem);
 }
 void YtDataLinkPushPosix::sendResponseAsync(YtRpcResponse_ReturnCode code, bool has_sequenceId, int32_t sequenceId)
+{
+    sendResponseWithIntDataAsync(code, 0, has_sequenceId, sequenceId);
+}
+void YtDataLinkPushPosix::sendResponseWithIntDataAsync(YtRpcResponse_ReturnCode code, int intData, bool has_sequenceId, int32_t sequenceId)
 {
     std::shared_ptr<YtMsg> msg = YtMsgPool::getInstance()->receive();
     if (msg)
     {
         msg->which_values = YtMsg_response_tag;
         msg->values.response.which_data = YtRpcResponse_intData_tag;
+        msg->values.response.data.intData = intData;
 
         msg->values.response.has_sequenceId = has_sequenceId;
         msg->values.response.sequenceId = sequenceId;
@@ -191,7 +196,7 @@ void *YtThread::threadFunc(void *args)
     LOG_D("YtThread finished %p\n", yt);
     return ret;
 }
-YtThread::YtThread(const char *name) : mName(name)
+YtThread::YtThread(string name) : mName(name)
 {
 }
 YtThread::~YtThread()
@@ -231,10 +236,10 @@ void YtThread::start()
         return;
     }
 #ifdef __rtems__
-    rtems_object_set_name(thread, mName); //for moviDebug
+    rtems_object_set_name(thread, mName.c_str()); //for moviDebug
 #endif
 #ifndef INC_FREERTOS_H
-    pthread_setname_np(thread, mName); //for rtems ps
+    pthread_setname_np(thread, mName.c_str()); //for rtems ps
 #endif
 
     ret = pthread_attr_destroy(&attr);
@@ -373,7 +378,7 @@ int YtSerialPortPosix::write(void *buffer, size_t len)
     //     printf("0x%02x%c", ((uint8_t*)buffer)[k], k==len-1?'\n':',');
     if (ret <= 0)
     {
-        LOG_E("[serial] write error %d!", ret);
+        LOG_E("[serial] write error %d!\n", ret);
         close();
     }
     return ret;

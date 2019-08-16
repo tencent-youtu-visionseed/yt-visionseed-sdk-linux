@@ -50,6 +50,7 @@ public:
     bool SetCamAutoExposure(CameraID camId);
     bool SetCamManualExposure(CameraID camId, int32_t timeUs, int32_t gain);
     bool SetFlasher(int32_t flasherIR, int32_t flasherWhite);
+    void SetFlasherAsync(int32_t flasherIR, int32_t flasherWhite);
     // bool SetCameraAIAbility(int32_t ability); // !!! Not implemented.
     // bool TakePicture(CameraID camId, int32_t mode, std::string pathHost);
 
@@ -65,11 +66,13 @@ public:
     // *       Face Library
     // */
     // std::string GetFaceLibsInfo();
-    // bool ClearFaceLibs();
-    // bool RegisterFaceIdWithPic(std::string path, std::string faceId);
-    // bool RegisterFaceIdFromCamera(std::string faceId);
-    // bool VerifyFaceWithPic(std::string path, int32_t libId, std::string faceId);
-    // bool DeleteFaceId(std::string faceId);
+    std::vector<FaceIdInfo> ListFaceId();
+    int32_t RegisterFaceIdWithPic(std::string path, std::string faceName);
+    int32_t RegisterFaceIdFromCamera(std::string faceName);
+    bool SetFaceName(int32_t faceId, std::string faceName);
+    int32_t DeleteFaceName(std::string faceName); //return delete count
+    bool DeleteFaceId(int32_t faceId);
+    bool ClearFaceLib();
 
 private:
     static YtMessenger *messenger;

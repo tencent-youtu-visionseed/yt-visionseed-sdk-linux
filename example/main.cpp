@@ -20,6 +20,16 @@ void OnFaceRetrieveResult(shared_ptr<YtMsg> message)
     for (size_t i = 0; i < VSRESULT_DATA(message).faceDetectionResult.face_count; i++)
     {
         printf("face: %d/%d\n", (int)(i+1), VSRESULT_DATA(message).faceDetectionResult.face_count);
+
+        // 输出人脸ID
+        if (VSRESULT_DATA(message).faceDetectionResult.face[i].has_name &&
+            VSRESULT_DATA(message).faceDetectionResult.face[i].has_nameConfidence)
+        {
+            const char *name = VSRESULT_DATA(message).faceDetectionResult.face[i].name;
+            float confidence = VSRESULT_DATA(message).faceDetectionResult.face[i].nameConfidence;
+            printf("Who: %s (confidence: %0.3f)\n", name, confidence);
+        }
+
         // 输出人脸框信息
         const Rect& rect = VSRESULT_DATA(message).faceDetectionResult.face[i].rect;
         printf("faceRect, x:%d y:%d, width:%d, height:%d\n", rect.x, rect.y, rect.w, rect.h);

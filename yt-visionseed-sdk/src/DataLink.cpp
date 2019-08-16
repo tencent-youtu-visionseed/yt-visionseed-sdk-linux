@@ -193,7 +193,7 @@ YtMsg *YtDataLink::recvRunOnce()
                                 #ifdef __rtems__
                                     LOG_D("[YtMsg] recv %s msg: %d\n", (message->which_values == YtMsg_rpc_tag ? "rpc" : ""), (message->which_values == YtMsg_rpc_tag ? message->values.rpc.func : -1));
                                 #else
-                                    LOG_D("[YtMsg] recv len=%d\n", mMsgLen);
+                                    LOG_I("[YtMsg] recv len=%d\n", mMsgLen);
                                 #endif
                                 return message;
                             }
