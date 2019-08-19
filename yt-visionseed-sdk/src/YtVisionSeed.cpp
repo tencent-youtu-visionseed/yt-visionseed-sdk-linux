@@ -173,43 +173,50 @@ bool YtVisionSeed::ClearFaceLib()
     return VSRPC_CALL(request, response);
 }
 
-int32_t YtVisionSeed::RegisterFaceIdWithPic(std::string path, std::string faceName)
+YtRpcResponse_ReturnCode YtVisionSeed::RegisterFaceIdWithPic(std::string path, std::string faceName, int32_t *faceIdOut)
 {
     // send file & do register
     std::size_t extPos = path.rfind(".");
     if (extPos == std::string::npos)
     {
-        return -1;
+        return YtRpcResponse_ReturnCode_ERROR_INVALID_PATH;
     }
     std::string ext = path.substr(extPos);
     std::string remotePath = std::string("/tmp/reg") + ext;
     LOG_D("remotePath = %s\n", remotePath.c_str());
     if (!messenger->SendFile(path, remotePath.c_str()))
     {
-        return -1;
+        return YtRpcResponse_ReturnCode_ERROR_INVALID_PATH;
     }
 
     VSRPC(request, registerFaceIdWithPic, registerFaceIdWithPicParams, response);
     strcpy(VSRPC_PARAM(request).registerFaceIdWithPicParams.filePath, remotePath.c_str());
     strcpy(VSRPC_PARAM(request).registerFaceIdWithPicParams.faceName, faceName.c_str());
 
-    if (!VSRPC_CALL(request, response))
+    if (VSRPC_CALL(request, response))
     {
-        return -1;
+        if (faceIdOut != NULL)
+        {
+            *faceIdOut = response->values.response.data.intData;
+        }
     }
-    return response->values.response.data.intData;
+    return response ? response->values.response.code : YtRpcResponse_ReturnCode_ERROR_OTHER;
 }
 
-int32_t YtVisionSeed::RegisterFaceIdFromCamera(std::string faceName)
+YtRpcResponse_ReturnCode YtVisionSeed::RegisterFaceIdFromCamera(std::string faceName, int32_t timeoutMs, int32_t *faceIdOut)
 {
-    VSRPC(request, registerFaceIdFromCamera, strParams, response);
-    strcpy(VSRPC_PARAM(request).strParams, faceName.c_str());
+    VSRPC(request, registerFaceIdFromCamera, registerFaceIdFromCameraParams, response);
+    VSRPC_PARAM(request).registerFaceIdFromCameraParams.timeoutMs = timeoutMs;
+    strcpy(VSRPC_PARAM(request).registerFaceIdFromCameraParams.faceName, faceName.c_str());
 
-    if (!VSRPC_CALL(request, response))
+    if (VSRPC_CALL(request, response))
     {
-        return -1;
+        if (faceIdOut != NULL)
+        {
+            *faceIdOut = response->values.response.data.intData;
+        }
     }
-    return response->values.response.data.intData;
+    return response ? response->values.response.code : YtRpcResponse_ReturnCode_ERROR_OTHER;
 }
 
 bool YtVisionSeed::DeleteFaceId(int32_t faceId)

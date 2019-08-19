@@ -67,8 +67,9 @@ public:
     // */
     // std::string GetFaceLibsInfo();
     std::vector<FaceIdInfo> ListFaceId();
-    int32_t RegisterFaceIdWithPic(std::string path, std::string faceName);
-    int32_t RegisterFaceIdFromCamera(std::string faceName);
+
+    YtRpcResponse_ReturnCode RegisterFaceIdWithPic(std::string path, std::string faceName, int32_t *faceIdOut);
+    YtRpcResponse_ReturnCode RegisterFaceIdFromCamera(std::string faceName, int32_t timeoutMs, int32_t *faceIdOut);
     bool SetFaceName(int32_t faceId, std::string faceName);
     int32_t DeleteFaceName(std::string faceName); //return delete count
     bool DeleteFaceId(int32_t faceId);
