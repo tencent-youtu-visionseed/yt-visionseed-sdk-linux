@@ -20,11 +20,30 @@
 #include <Flic.h>
 #endif
 
+#if defined(ESP32)
+	#include "DataLinkESP32.h"
+#elif defined(STM32)
+    #include "DataLinkSTM32HAL.h"
+    extern "C" int usleep(useconds_t us)
+    {
+        vTaskDelay(us /1000 / portTICK_PERIOD_MS);
+        return 0;
+    }
+#endif
+
 #ifdef INC_FREERTOS_H
-#include "DataLinkESP32.h"
 #else
 #include <termios.h>
 #include <unistd.h>
+int sem_timedwait(sem_t *sem, const int64_t ms)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += ms * 1000000;
+    ts.tv_sec += ts.tv_nsec / 1000000000;
+    ts.tv_nsec %= 1000000000;
+    return sem_timedwait(sem, &ts);
+}
 #endif
 
 vector<YtDataLinkPullPosix *> YtDataLinkPullPosix::mInstance;
@@ -51,13 +70,15 @@ void YtDataLinkPullPosix::DetachAll(IObserver *p)
 {
     for (size_t i = 0; i < mInstance.size(); i++)
     {
-        mInstance[i]->Attach(p);
+        mInstance[i]->Detach(p);
     }
 }
 YtDataLinkPullPosix::YtDataLinkPullPosix(const char *dev) : YtSubject(), YtThread("YtDataLinkPull"), YtDataLink(NULL)
 {
-#ifdef INC_FREERTOS_H
+#if defined(ESP32)
     mPort = (new YtSerialPortESP32(dev));
+#elif defined(STM32)
+    mPort = (new YtSerialPortSTM32HAL(dev));
 #else
     mPort = (new YtSerialPortPosix(dev));
 #endif
@@ -71,10 +92,16 @@ void *YtDataLinkPullPosix::run()
 {
     while (!shouldExit)
     {
+#ifdef YTMSG_USE_RECV_POOL
+        std::shared_ptr<YtMsg> message = recvRunOnce();
+        if (message)
+        {
+#else
         YtMsg *msg = recvRunOnce();
         if (msg)
         {
             std::shared_ptr<YtMsg> message(msg, [](YtMsg *p) { /*printf("[YtDataLink] release %p\n", p);*/ pb_release(YtMsg_fields, p); delete p; });
+#endif
             Notify(instanceId, message);
 
             if (message->which_values == YtMsg_rpc_tag)
@@ -205,14 +232,17 @@ YtThread::~YtThread()
 void YtThread::start()
 {
     shouldExit = false;
-    pthread_attr_t attr;
+#ifdef INC_FREERTOS_H
+#else
     int ret;
+    pthread_attr_t attr;
     ret = pthread_attr_init(&attr);
     if (0 != ret)
     {
        LOG_E("pthread_attr_init error %d\n", ret);
        return;
     }
+#endif
 #ifdef __rtems__
     ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
     if (0 != ret)
@@ -221,20 +251,34 @@ void YtThread::start()
         return;
     }
 #endif
-#ifndef INC_FREERTOS_H
+
+#ifdef INC_FREERTOS_H
+#ifdef STM32
+    if (xTaskCreate((TaskFunction_t)threadFunc, mName.c_str(), 512, this, 5, &thread) != pdPASS)
+    {
+        LOG_E("create task %s failed.\n", mName.c_str());
+        return;
+    }
+#else
+    // ESP32平台，如果不绑定CPU核心，会发生奇怪的内存泄露（shared_ptr构析函数有概率不被执行，导致YtMsgPool不断增长）
+    xTaskCreatePinnedToCore((TaskFunction_t)threadFunc, mName.c_str(), 4096, this, 5, &thread, 1);
+    // xTaskCreate((TaskFunction_t)threadFunc, mName.c_str(), 4096, this, 5, &thread);
+#endif
+#else
     ret = pthread_attr_setschedpolicy (&attr, SCHED_RR);
     if (0 != ret)
     {
         LOG_E("pthread_attr_set_schedule_policy error %d\n", ret);
         return;
     }
-#endif
     ret = pthread_create(&thread, &attr, threadFunc, this);
     if (0 != ret)
     {
         LOG_E("pthread_create error %d\n", ret);
         return;
     }
+#endif
+
 #ifdef __rtems__
     rtems_object_set_name(thread, mName.c_str()); //for moviDebug
 #endif
@@ -242,21 +286,28 @@ void YtThread::start()
     pthread_setname_np(thread, mName.c_str()); //for rtems ps
 #endif
 
+#ifdef INC_FREERTOS_H
+#else
     ret = pthread_attr_destroy(&attr);
     if (0 != ret)
     {
         LOG_E("pthread_attr_destroy error %d\n", ret);
         return;
     }
+#endif
 }
 void YtThread::exit()
 {
     shouldExit = true;
+#ifdef INC_FREERTOS_H
+    vTaskDelete(thread);
+#else
     int ret = pthread_join(thread, NULL);
     if (ret != 0)
     {
         LOG_E("pthread_join error %d\n", ret);
     }
+#endif
 }
 
 

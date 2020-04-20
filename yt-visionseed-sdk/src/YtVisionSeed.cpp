@@ -1,18 +1,9 @@
 #include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 #include "YtVisionSeed.h"
 
-YtMessenger* YtVisionSeed::messenger = NULL;
-pb_byte_t* YtVisionSeed::mBuffer = NULL;
-
 YtVisionSeed::YtVisionSeed(const char* dev)
 {
-    if ( messenger ) {
-        delete(messenger);
-        messenger = NULL;
-    }
     messenger = new YtMessenger(dev);
     // REGISTER_CALLBACK(sendBlob);
     messenger->startLoop();
@@ -33,6 +24,11 @@ YtVisionSeed::~YtVisionSeed()
         messenger = NULL;
     }
     LOG_D("[YtVisionSeed] released.\n");
+}
+
+YtRpcResponse_ReturnCode YtVisionSeed::getErrorCode(shared_ptr<YtMsg> response)
+{
+    return response ? response->values.response.code : YtRpcResponse_ReturnCode_ERROR_RPC_TIMEOUT;
 }
 
 std::string YtVisionSeed::GetDeviceInfo()
@@ -200,7 +196,7 @@ YtRpcResponse_ReturnCode YtVisionSeed::RegisterFaceIdWithPic(std::string path, s
             *faceIdOut = response->values.response.data.intData;
         }
     }
-    return response ? response->values.response.code : YtRpcResponse_ReturnCode_ERROR_OTHER;
+    return getErrorCode(response);
 }
 
 YtRpcResponse_ReturnCode YtVisionSeed::RegisterFaceIdFromCamera(std::string faceName, int32_t timeoutMs, int32_t *faceIdOut)
@@ -216,7 +212,23 @@ YtRpcResponse_ReturnCode YtVisionSeed::RegisterFaceIdFromCamera(std::string face
             *faceIdOut = response->values.response.data.intData;
         }
     }
-    return response ? response->values.response.code : YtRpcResponse_ReturnCode_ERROR_OTHER;
+    return getErrorCode(response);
+}
+
+YtRpcResponse_ReturnCode YtVisionSeed::RegisterFaceIdWithTraceId(std::string faceName, uint32_t traceId, int32_t *faceIdOut)
+{
+    VSRPC(request, registerFaceIdWithTraceId, registerFaceIdWithTraceIdParams, response);
+    VSRPC_PARAM(request).registerFaceIdWithTraceIdParams.traceId = traceId;
+    strcpy(VSRPC_PARAM(request).registerFaceIdWithTraceIdParams.faceName, faceName.c_str());
+
+    if (VSRPC_CALL(request, response))
+    {
+        if (faceIdOut != NULL)
+        {
+            *faceIdOut = response->values.response.data.intData;
+        }
+    }
+    return getErrorCode(response);
 }
 
 bool YtVisionSeed::DeleteFaceId(int32_t faceId)
@@ -243,6 +255,7 @@ std::vector<FaceIdInfo> YtVisionSeed::ListFaceId()
 {
     int faceListBegin = 0;
     std::vector<FaceIdInfo> faces;
+#ifdef YtResult_size
     while (true)
     {
         VSRPC(request, listFaceId, listFaceIdParams, response);
@@ -265,7 +278,10 @@ std::vector<FaceIdInfo> YtVisionSeed::ListFaceId()
 
         faceListBegin = faces[faces.size() - 1].faceId + 1;
     }
-
+#else
+    // TODO: for dynamic (nano) version of proto, it requires pb_callback_t interface
+    LOG_E("[ListFaceId] Not implemented!\n");
+#endif
     return faces;
 }
 
@@ -277,7 +293,65 @@ bool YtVisionSeed::SetFaceName(int32_t faceId, std::string faceName)
     return VSRPC_CALL(request, response);
 }
 
-void YtVisionSeed::RegisterOnFaceResult(OnResult callback)
+YtRpcResponse_ReturnCode YtVisionSeed::GetFacePic(int32_t faceId, std::string path)
 {
-    messenger->RegisterOnFaceResult(callback);
+    VSRPC(request, getFacePic, intParams, response);
+    VSRPC_PARAM(request).intParams = faceId;
+    if (VSRPC_CALL(request, response))
+    {
+        size_t len = response->values.response.data.filePart.totalLength;
+        if (len != response->values.response.data.filePart.data->size)
+        {
+            LOG_E("[GetFacePic] multiple package not support yet!\n");
+            return YtRpcResponse_ReturnCode_ERROR_OTHER;
+        }
+
+        FILE *outfile = fopen(path.c_str(), "wb");
+        if (outfile)
+        {
+            fwrite(response->values.response.data.filePart.data->bytes, len, 1, outfile);
+            fclose(outfile);
+        }
+        else
+        {
+            return YtRpcResponse_ReturnCode_ERROR_INVALID_PATH;
+        }
+    }
+    return getErrorCode(response);
+}
+
+YtRpcResponse_ReturnCode YtVisionSeed::GetTracePic(int32_t traceId, std::string path)
+{
+    VSRPC(request, getTracePic, intParams, response);
+    VSRPC_PARAM(request).intParams = traceId;
+    if (VSRPC_CALL(request, response))
+    {
+        size_t len = response->values.response.data.filePart.totalLength;
+        if (len != response->values.response.data.filePart.data->size)
+        {
+            LOG_E("[GetTracePic] multiple package not support yet!\n");
+            return YtRpcResponse_ReturnCode_ERROR_OTHER;
+        }
+
+        FILE *outfile = fopen(path.c_str(), "wb");
+        if (outfile)
+        {
+            fwrite(response->values.response.data.filePart.data->bytes, len, 1, outfile);
+            fclose(outfile);
+        }
+        else
+        {
+            return YtRpcResponse_ReturnCode_ERROR_INVALID_PATH;
+        }
+    }
+    return getErrorCode(response);
+}
+
+void YtVisionSeed::RegisterOnStatus(OnResultCallback callback)
+{
+    messenger->RegisterOnStatus(callback);
+}
+void YtVisionSeed::RegisterOnResult(OnResultCallback callback)
+{
+    messenger->RegisterOnResult(callback);
 }

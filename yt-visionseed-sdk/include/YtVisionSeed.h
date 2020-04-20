@@ -31,6 +31,7 @@ class YtVisionSeed
 public:
     virtual ~YtVisionSeed();
     YtVisionSeed(const char* dev);
+    YtRpcResponse_ReturnCode getErrorCode(shared_ptr<YtMsg> response);
 
     // DECLARE_CALLBACK(sendBlob);
 
@@ -59,7 +60,8 @@ public:
     // *       AI
     // */
     // bool SetFaceAIAbility(int32_t ability);
-    void RegisterOnFaceResult(OnResult callback);
+    void RegisterOnStatus(OnResultCallback callback);
+    void RegisterOnResult(OnResultCallback callback);
 
     // /*
     // *
@@ -70,14 +72,16 @@ public:
 
     YtRpcResponse_ReturnCode RegisterFaceIdWithPic(std::string path, std::string faceName, int32_t *faceIdOut);
     YtRpcResponse_ReturnCode RegisterFaceIdFromCamera(std::string faceName, int32_t timeoutMs, int32_t *faceIdOut);
+    YtRpcResponse_ReturnCode RegisterFaceIdWithTraceId(std::string faceName, uint32_t traceId, int32_t *faceIdOut);
     bool SetFaceName(int32_t faceId, std::string faceName);
     int32_t DeleteFaceName(std::string faceName); //return delete count
     bool DeleteFaceId(int32_t faceId);
     bool ClearFaceLib();
+    YtRpcResponse_ReturnCode GetFacePic(int32_t faceId, std::string path);
+    YtRpcResponse_ReturnCode GetTracePic(int32_t traceId, std::string path);
 
 private:
-    static YtMessenger *messenger;
-    static pb_byte_t* mBuffer;
+    YtMessenger *messenger;
 
     bool SetCameraExposureParams(CameraID camId, CameraExposureParams_ExposureType type, int32_t timeUs, int32_t gain);
 };

@@ -2,7 +2,6 @@
 #define _YTLOG_H
 
 #include <stdio.h>
-#include <unistd.h>
 
 #define YT_LOG_LEVEL_ERR 1
 #define YT_LOG_LEVEL_WARN 2
@@ -13,11 +12,33 @@
 #define YT_LOG_LEVEL YT_LOG_LEVEL_WARN
 #endif
 
+#define COLOR_RED "\033[31m"
+#define COLOR_GREEN "\033[32m"
+#define COLOR_YELLOW "\033[33m"
+#define COLOR_BLUE "\033[34m"
+#define COLOR_PURPLE "\033[35m"
+#define COLOR_CYAN "\033[36m"
+#define COLOR_CYAN_LIGHT "\033[36;1m"
+#define COLOR_NO "\033[0m"
+
+//#define NO_PRINT
 #if defined(YTMSG_FULL) || defined(YTMSG_LITE)
+    #include <unistd.h>
+#ifndef STM32
     #define PRINTF printf
+#else
+	#ifdef __cplusplus
+	extern "C" {
+	#endif
+		void stm32printf(const char *fmt, ...);
+	#ifdef __cplusplus
+	}
+	#endif
+	#define PRINTF stm32printf
+#endif
     #define USLEEP(us) usleep(us)
 #else
-    void vkprintf(char *fmt, ...);
+    void vkprintf(const char *fmt, ...);
     #define PRINTF vkprintf
     #define USLEEP(x)
 #endif

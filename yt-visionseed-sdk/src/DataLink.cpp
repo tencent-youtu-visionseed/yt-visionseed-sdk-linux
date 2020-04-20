@@ -1,7 +1,6 @@
 //author: chenliang @ Youtu Lab, Tencent
 
 #include <stdio.h>
-#include <fcntl.h>
 #include <stdlib.h>
 
 #include <pb_encode.h>
@@ -9,6 +8,9 @@
 #include "YtMsg.pb.h"
 
 #include "DataLink.h"
+#ifdef YTMSG_USE_RECV_POOL
+#include "YtMsgPool.h"
+#endif
 
 #ifndef MIN
     #define MIN(a,b) ( ((a)<(b))?(a):(b) )
@@ -16,6 +18,7 @@
 
 YtSerialPortBase::YtSerialPortBase(const char *dev)
 {
+    mPortFd = -1;
     snprintf(mDev, sizeof(mDev), "%s", dev);
 }
 YtSerialPortBase::~YtSerialPortBase()
@@ -23,7 +26,11 @@ YtSerialPortBase::~YtSerialPortBase()
 }
 // #include <VcsHooksApi.h>
 
-YtMsg *YtDataLink::recvRunOnce()
+#ifdef YTMSG_USE_RECV_POOL
+std::shared_ptr<YtMsg> YtDataLink::recvRunOnce()
+#else
+const uint8_t *YtDataLink::recvRunOnce()
+#endif
 {
     if (!mPort->isOpen())
     {
@@ -171,25 +178,30 @@ YtMsg *YtDataLink::recvRunOnce()
                         mCrc = (mCrc << 8) | ch;
                         if (mStatus == YT_DL_CRC_L)
                         {
+                            mStatus = YT_DL_IDLE;
                             if ((mCrcCalc) != mCrc)
                             {
                                 LOG_E("[YtMsg] Error: msg crc 0x%04x != 0x%04x\n", mCrcCalc, mCrc);
-                                mStatus = YT_DL_IDLE;
                                 return NULL;
                             }
 
-                            YtMsg *message = alloc();
+#ifdef YTMSG_USE_RECV_POOL
+                            std::shared_ptr<YtMsg> message = YtMsgPool::getInstance()->receive();
+                            if (!message)
+                            {
+                                LOG_E("memory pool empty or no memory.\n");
+                                return NULL;
+                            }
                             // LOG_D("[YtMsg] new %p\n", message.get());
                             // YtMsg message = YtMsg_init_zero;
                             /* Create a stream that reads from the buffer. */
                             pb_istream_t stream = pb_istream_from_buffer(mBuf, mMsgLen);
 
                             /* Now we are ready to decode the message. */
-                            bool status = pb_decode(&stream, YtMsg_fields, message);
+                            bool status = pb_decode(&stream, YtMsg_fields, message.get());
 
                             if (status)
                             {
-                                mStatus = YT_DL_IDLE;
                                 #ifdef __rtems__
                                     LOG_D("[YtMsg] recv %s msg: %d\n", (message->which_values == YtMsg_rpc_tag ? "rpc" : ""), (message->which_values == YtMsg_rpc_tag ? message->values.rpc.func : -1));
                                 #else
@@ -201,8 +213,11 @@ YtMsg *YtDataLink::recvRunOnce()
                             {
                                 LOG_E("[YtMsg] Decoding failed: %s\n", PB_GET_ERROR(&stream));
                             }
+#else
+                            uint32_t len;
+                            return getPbField(101, &len);
+#endif
 
-                            mStatus = YT_DL_IDLE;
                             return NULL;
                         }
                         mStatus = (YtDataLinkStatus)((int)mStatus + 1);
@@ -221,6 +236,45 @@ YtMsg *YtDataLink::recvRunOnce()
         // write(mPortFd, &ch, 1);
     }
 
+    return NULL;
+}
+
+static uint64_t decode_varint(const uint8_t *buf, size_t *i)
+{
+    pb_byte_t byte;
+    uint_fast8_t bitpos = 0;
+    uint64_t result = 0;
+    do
+    {
+        byte = buf[(*i) ++];
+        result |= (uint64_t)(byte & 0x7F) << bitpos;
+        bitpos = (uint_fast8_t)(bitpos + 7);
+    } while (byte & 0x80);
+    return result;
+}
+
+const uint8_t *YtDataLink::getPbField(int tag, uint32_t *len)
+{
+    size_t i = 1;
+    // 跳进整个{}
+    size_t objend = decode_varint(mBuf, &i) + i;
+    while (i < MIN(objend, sizeof(mBuf)))
+    {
+        uint64_t field = decode_varint(mBuf, &i);
+        uint8_t type = (field & 0x7);
+        // LOG_E("i=%d, tag=%d, type=%d\n", i, (int)(field >> 3), type);
+        if (tag == (field >> 3))
+        {
+            *len = decode_varint(mBuf, &i);
+            return &mBuf[i];
+        }
+        uint64_t objlen = decode_varint(mBuf, &i);
+        if (type == 2) //Length-delimited
+        {
+            // 跳过内容
+            i += objlen;
+        }
+    }
     return NULL;
 }
 
@@ -260,6 +314,16 @@ CONST static uint16_t ccitt_table[256] = {
 };
 YtDataLink::YtDataLink(YtSerialPortBase *port)
 {
+    mStatus = YT_DL_IDLE;
+    mMsgLen = 0;
+    mCrc = 0;
+    mBufi = 0;
+    mTrans = false;
+    bufRemain = 0;
+    bufStart = 0;
+#if defined(YTMSG_FULL) || defined(YTMSG_LITE)
+    mSendBufi = 0;
+#endif
     mPort = port;
 }
 YtDataLink::~YtDataLink()
@@ -275,6 +339,8 @@ void YtDataLink::crcUpdate(uint8_t ch, bool first)
     }
     mCrcCalc = ACCESS_CONST(ccitt_table[(mCrcCalc >> 8 ^ ch) & 0xff]) ^ (mCrcCalc << 8);
 }
+
+#if defined(YTMSG_FULL) || defined(YTMSG_LITE)
 void YtDataLink::crcSendUpdate(uint8_t ch, bool first)
 {
     if (first)
@@ -324,6 +390,7 @@ void YtDataLink::sendYtMsg(YtMsg *message)
     /* Now we are ready to encode the message! */
     bool status = pb_encode(&stream, YtMsg_fields, message);
     uint32_t message_length = stream.bytes_written;
+    LOG_I("[YtMsg] len=%d\n", message_length);
 
     if (status)
     {
@@ -351,7 +418,272 @@ void YtDataLink::sendYtMsg(YtMsg *message)
         LOG_E("[YtMsg] Encoding failed: %s\n", PB_GET_ERROR(&stream));
     }
 }
+#endif
+
 YtMsg *YtDataLink::alloc()
 {
-    return new YtMsg();
+    YtMsg *ret = new YtMsg();
+    memset(ret, 0, sizeof(YtMsg));
+    return ret;
+}
+
+// len_path, model, idx, model, idx, ..., len_data, data0, ...
+// 2, VS_MODEL_FACE_DETECTION, 0, 12, ...
+// 3, VS_MODEL_FACE_DETECTION, 0, VS_MODEL_FACE_POSE, 6, ...
+// 1, MODEL_CUSTOM_LANE, 8, ...
+bool unpackInt16(const uint8_t *&p, uint8_t len, int16_t *ret)
+{
+    if (len < 2) return false;
+    *ret = *(p+1);
+    *ret <<= 8;
+    *ret |= *(p);
+    p += 2;
+    return true;
+}
+bool unpackUInt16(const uint8_t *&p, uint8_t len, uint16_t *ret)
+{
+    if (len < 2) return false;
+    *ret = *(p+1);
+    *ret <<= 8;
+    *ret |= *(p);
+    p += 2;
+    return true;
+}
+bool unpackVarUInt32(const uint8_t *&p, uint32_t *ret)
+{
+    // LEB128
+    *ret = 0;
+    uint8_t shift = 0;
+    while (true) {
+        uint32_t byte = *(p ++);
+        *ret |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) == 0)
+            break;
+        shift += 7;
+    }
+    return true;
+}
+uint8_t packVarUInt32(uint8_t *&p, uint32_t val)
+{
+    // LEB128
+    uint8_t ret = 0;
+    do {
+        uint32_t byte = val & 0x7f;
+        val >>= 7;
+        if (val != 0) /* more bytes to come */
+            byte |= 0x80;
+        *(p ++) = byte & 0xff;
+        ret ++;
+    } while (val != 0);
+    return ret;
+}
+
+const uint8_t* YtDataLink::getResult(const uint8_t *buf, uint32_t &ret_len, const uint8_t path[], const uint8_t path_len)
+{
+    const uint8_t *p = buf + 1;
+    for (size_t i = 0; i < buf[0]; i++)
+    {
+        uint8_t cur_path_len = p[0];
+        p += 1;
+        const uint8_t *p_path = p;
+        p += cur_path_len;
+        uint8_t cur_data_type = p[0];
+        p += 1;
+        uint32_t cur_data_len;
+        unpackVarUInt32(p, &cur_data_len);
+        if (cur_path_len == path_len)
+        {
+            if (memcmp(p_path, path, path_len) == 0)
+            {
+                ret_len = cur_data_len;
+                return p;
+            }
+        }
+        p += cur_data_len;
+    }
+    ret_len = 0;
+    return NULL;
+}
+void YtDataLink::initDataV2(YtMsg *message)
+{
+#if defined(YTMSG_FULL)
+    message->values.result.has_dataV2 = true;
+    pb_bytes_array_t *data = VSRESULT_DATAV2(message);
+
+    uint8_t *buf = data->bytes;
+    uint8_t *p = buf + 1;
+    buf[0] = 0;
+    data->size = p - buf;
+#endif
+}
+void YtDataLink::addResultRaw(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, YtVisionSeedResultType _type, const uint8_t *content, const uint32_t len)
+{
+    uint8_t *buf = data->bytes;
+    const uint8_t *p = buf + 1;
+    if (data->size + len + 4 > size)
+    {
+         LOG_E("[addResult] " COLOR_RED "full" COLOR_NO " cnt=%d, sz = %d + %d > %d\n", buf[0], data->size, len + 4, size);
+         return;
+    }
+    for (size_t i = 0; i < buf[0]; i++)
+    {
+        uint8_t cur_path_len = p[0];
+        p += 1;
+        const uint8_t *p_path = p;
+        p += cur_path_len;
+        uint8_t cur_data_type = p[0];
+        p += 1;
+        uint32_t cur_data_len;
+        unpackVarUInt32(p, &cur_data_len);
+        p += cur_data_len;
+    }
+    uint8_t *pp = (uint8_t*)p;
+    pp[0] = path_len;
+    pp += 1;
+    memcpy(pp, path, path_len);
+    pp += path_len;
+    pp[0] = _type;
+    pp += 1;
+    packVarUInt32(pp, len);
+    memcpy(pp, content, len);
+    pp += len;
+    buf[0] ++;
+    data->size = pp - buf;
+    LOG_I("[addResult] cnt=%d, sz=%d / %d\n", buf[0], data->size, size);
+}
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeRect *rect, const uint8_t path[], const uint8_t path_len)
+{
+    uint32_t len = 0;
+    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    if (p0 == NULL)
+    {
+        return false;
+    }
+    const uint8_t *p = p0;
+    uint16_t conf;
+    if (!unpackUInt16(p, len - (p - p0), &conf)) return false;
+    rect->conf = conf / 65535.f;
+    if (!unpackUInt16(p, len - (p - p0), &rect->cls)) return false;
+    if (!unpackInt16(p, len - (p - p0), &rect->x)) return false;
+    if (!unpackInt16(p, len - (p - p0), &rect->y)) return false;
+    if (!unpackInt16(p, len - (p - p0), &rect->w)) return false;
+    if (!unpackInt16(p, len - (p - p0), &rect->h)) return false;
+    return true;
+}
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeClassification *result, const uint8_t path[], const uint8_t path_len)
+{
+    uint32_t len = 0;
+    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    if (p0 == NULL)
+    {
+        return false;
+    }
+    const uint8_t *p = p0;
+    uint16_t conf;
+    if (!unpackUInt16(p, len - (p - p0), &conf)) return false;
+    result->conf = conf / 65535.f;
+    if (!unpackUInt16(p, len - (p - p0), &result->cls)) return false;
+    return true;
+}
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeArray *result, const uint8_t path[], const uint8_t path_len)
+{
+    uint32_t len = 0;
+    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    if (p0 == NULL)
+    {
+        return false;
+    }
+    const uint8_t *p = p0;
+    result->p = (const float*)p;
+    result->count = len / 4;
+    return true;
+}
+bool YtDataLink::getResult(const uint8_t *buf, uint32_t *result, const uint8_t path[], const uint8_t path_len)
+{
+    uint32_t len = 0;
+    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    if (p0 == NULL)
+    {
+        return false;
+    }
+    const uint8_t *p = p0;
+    unpackVarUInt32(p, result);
+    return true;
+}
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeString *result, const uint8_t path[], const uint8_t path_len)
+{
+    uint32_t len = 0;
+    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    if (p0 == NULL)
+    {
+        return false;
+    }
+    const uint8_t *p = p0;
+    uint16_t conf;
+    if (!unpackUInt16(p, len - (p - p0), &conf)) return false;
+    result->conf = conf / 65535.f;
+    result->p = (const char*)p;
+    return true;
+}
+
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypePoints *result, const uint8_t path[], const uint8_t path_len)
+{
+    uint32_t len = 0;
+    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    if (p0 == NULL)
+    {
+        return false;
+    }
+    const uint8_t *p = p0;
+    result->count = len / 4;
+    result->p = (YtVisionSeedResultTypePoints::Point*)p;
+    return true;
+}
+
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeRect &result)
+{
+    uint16_t conf = result.conf*65535;
+    uint8_t buf[] = {
+        (uint8_t)(conf), (uint8_t)(conf >> 8),
+        (uint8_t)(result.cls), (uint8_t)(result.cls >> 8),
+        (uint8_t)(result.x), (uint8_t)(result.x >> 8),
+        (uint8_t)(result.y), (uint8_t)(result.y >> 8),
+        (uint8_t)(result.w), (uint8_t)(result.w >> 8),
+        (uint8_t)(result.h), (uint8_t)(result.h >> 8),
+    };
+    addResultRaw(data, size, path, path_len, YT_RESULT_RECT, buf, sizeof(buf));
+}
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeClassification &result)
+{
+    uint16_t conf = result.conf*65535;
+    uint8_t buf[] = {
+        (uint8_t)(conf), (uint8_t)(conf >> 8),
+        (uint8_t)(result.cls), (uint8_t)(result.cls >> 8),
+    };
+    addResultRaw(data, size, path, path_len, YT_RESULT_CLASSIFICATION, buf, sizeof(buf));
+}
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeArray &result)
+{
+    uint32_t len = result.count * 4;
+    addResultRaw(data, size, path, path_len, YT_RESULT_ARRAY, (const uint8_t *)result.p, len);
+}
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeString &result)
+{
+    uint16_t conf = result.conf*65535;
+    uint32_t len = strlen(result.p);
+    uint8_t buf[len + 1 + 2] = {(uint8_t)(conf), (uint8_t)(conf >> 8)};
+    memcpy(buf + 2, result.p, len);
+    buf[2 + len] = 0;
+    addResultRaw(data, size, path, path_len, YT_RESULT_STRING, buf, len + 1 + 2);
+}
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypePoints &result)
+{
+    addResultRaw(data, size, path, path_len, YT_RESULT_POINTS, (const uint8_t*)result.p, result.count * 4);
+}
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const uint32_t result)
+{
+    uint8_t buf[17];
+    uint8_t *p = buf;
+    uint8_t len = packVarUInt32(p, result);
+    addResultRaw(data, size, path, path_len, YT_RESULT_VARUINT32, buf, len);
 }

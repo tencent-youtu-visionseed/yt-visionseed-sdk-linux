@@ -6,17 +6,15 @@
 #include <memory>
 
 #include "YtMsg.pb.h"
+#include "SimplePool.h"
 
 using namespace std;
 
-class YtMsgPool {
+class YtMsgPool : public SimplePool<YtMsg> {
 public:
     static YtMsgPool *getInstance();
     YtMsgPool(int size);
     virtual ~YtMsgPool();
-    std::shared_ptr<YtMsg> receive();
 protected:
-    sem_t mSem;
-    vector<bool> mUsing;
-    vector<YtMsg*> mPool;
+    virtual void zero(YtMsg *p);
 };

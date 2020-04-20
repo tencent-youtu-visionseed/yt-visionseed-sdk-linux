@@ -7,7 +7,9 @@
 
 VisionSeed通过USB或UART接口，以结构化形式输出AI分析结果，用单片机就能玩转AI ，开发AI应用触手可及。
 
-官网的“快速入门”是一个很好的开始：https://visionseed.youtu.qq.com/
+example中的main.cpp是一个很好的开始，演示了如何获取人脸识别的结果。详细使用方法请参考官网的“快速入门”：https://visionseed.youtu.qq.com/
+
+此SDK需配合V1.2.3及以上版本固件使用，请通过官网的VisionSeed配置工具升级固件。
 
 ---
 

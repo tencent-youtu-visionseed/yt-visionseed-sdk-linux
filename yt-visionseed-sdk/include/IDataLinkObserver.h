@@ -7,18 +7,25 @@
 #endif
 #include <pthread.h>
 
-#if defined(ESP32)
-    #include <freertos/FreeRTOS.h>
-    #include <freertos/task.h>
-    #include <freertos/semphr.h>
+#if defined(ESP32) || defined(STM32)
+	#if defined(ESP32)
+		#include <freertos/FreeRTOS.h>
+		#include <freertos/task.h>
+		#include <freertos/semphr.h>
+	#elif defined(STM32)
+		#include <FreeRTOS.h>
+		#include <task.h>
+		#include <semphr.h>
+	#endif
     #define sem_t SemaphoreHandle_t
-    #define sem_timedwait(sem, ts) (xSemaphoreTake(*sem, ((ts)->tv_sec*1000+(ts)->tv_nsec/1000000)/portTICK_PERIOD_MS)==pdTRUE ? 0 : -1)
-    #define sem_wait(sem) xSemaphoreTake(*sem, 1000/portTICK_PERIOD_MS)
+	#define sem_timedwait(sem, ms) (xSemaphoreTake(*sem, ms/portTICK_PERIOD_MS)==pdTRUE?0:-1);
+    #define sem_wait(sem) while(xSemaphoreTake(*sem, 1000/portTICK_PERIOD_MS)!=pdTRUE);
     #define sem_post(sem) xSemaphoreGive(*sem)
     #define gettid() (long)xTaskGetCurrentTaskHandle()
     #define getpid() 0
 #else
     #include <semaphore.h>
+    int sem_timedwait(sem_t *sem, const int64_t ms);
 #endif
 
 #include <list>

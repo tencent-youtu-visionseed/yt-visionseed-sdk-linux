@@ -26,7 +26,11 @@ public:
     void exit();
 protected:
     volatile bool shouldExit;
+#ifdef INC_FREERTOS_H
+    TaskHandle_t thread;
+#else
     pthread_t thread;
+#endif
     string mName;
     YtThread(string name);
     virtual ~YtThread();

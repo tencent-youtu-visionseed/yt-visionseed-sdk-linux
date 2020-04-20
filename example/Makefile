@@ -3,7 +3,7 @@ INCLUDE_DIR=$(SDK_DIR)/include
 LIB_DIR=$(SDK_DIR)/lib
 BUILD_DIR=build
 
-CFLAGS=-g3 -std=c++11 -pthread -DPB_FIELD_32BIT -DPB_ENABLE_MALLOC -DYTMSG_FULL
+CFLAGS=-g3 -std=c++11 -pthread -DYTMSG_FULL
 
 SRC=main.cpp
 OBJS=$(addprefix $(BUILD_DIR)/, $(addsuffix .o, $(notdir $(basename $(SRC)))))

@@ -3,15 +3,13 @@
 
 #include <map>
 #include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 #include "pb_decode.h"
 #include "YtMsg.pb.h"
 #include "IDataLinkObserver.h"
 #include "DataLinkPosix.h"
 
-#if defined(ESP32)
+#if defined(ESP32) || defined(STM32)
 #else
     #include <sys/syscall.h>
     #define gettid() syscall(__NR_gettid)
@@ -52,7 +50,7 @@
 
 // Callback function types
 //typedef void (*PreviewCallback)(shared_ptr<YtMsg> message);
-typedef void (*OnResult)(shared_ptr<YtMsg> message);
+typedef void (*OnResultCallback)(shared_ptr<YtMsg> message);
 
 typedef void (*RpcCallback)(shared_ptr<YtMsg> message);
 
@@ -72,11 +70,12 @@ public:
     void RegisterCallback(int32_t func, RpcCallback callback);
 
 
-    bool SendBuffer(std::string pathVS, size_t totalLength, const uint8_t *blobBuf);
-    bool SendFile(std::string pathHost, std::string path);
+    bool SendBuffer(std::string pathVS, size_t totalLength, const uint8_t *blobBuf, std::string auth="");
+    bool SendFile(std::string pathHost, std::string path, std::string auth="");
 
 //    void RegisterPreviewCallback(PreviewCallback callback);
-    void RegisterOnFaceResult(OnResult callback);
+    void RegisterOnStatus(OnResultCallback callback);
+    void RegisterOnResult(OnResultCallback callback);
 //    bool WaitDownloadFaceLib();
 
     void startLoop();
@@ -87,8 +86,6 @@ protected:
     virtual void Update(int instanceId, shared_ptr<YtMsg> msg);
 
 private:
-    YtDataLinkPullPosix *pull;
-    YtDataLinkPushPosix *push;
 
     sem_t mMsgReadySem;
     sem_t mMsgProcessingSem;
@@ -102,12 +99,13 @@ private:
     void DispatchMsg(shared_ptr<YtMsg> message);
     std::map<int32_t, RpcCallback > mRpcTable;
 
-    bool SendFilePart(std::string pathVS, size_t totalLength, const uint8_t *blobBuf, size_t length, size_t offset);
+    bool SendFilePart(std::string pathVS, size_t totalLength, const uint8_t *blobBuf, size_t length, size_t offset, std::string auth="");
 //    sem_t mDownloadSem;
 //
 //    pb_byte_t * mBuffer = NULL;
 //
-    OnResult mFaceResultCallback;
+    OnResultCallback mNGResultCallback;
+    OnResultCallback mStatusCallback;
 };
 
 #endif

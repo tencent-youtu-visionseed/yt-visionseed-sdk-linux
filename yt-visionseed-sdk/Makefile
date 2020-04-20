@@ -3,7 +3,7 @@ SRC_DIR=src
 LIB_DIR=lib
 BUILD_DIR=build
 
-CFLAGS=-O3 -std=c++11 -pthread -DPB_FIELD_32BIT -DPB_ENABLE_MALLOC -DYTMSG_FULL -fPIC
+CFLAGS=-O3 -std=c++11 -pthread -DYTMSG_FULL -fPIC
 
 SRC=$(wildcard $(SRC_DIR)/*.c)
 SRC+=$(wildcard $(SRC_DIR)/*.cpp)

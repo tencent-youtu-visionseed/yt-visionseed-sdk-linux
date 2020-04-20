@@ -4,7 +4,7 @@
 
 #define DEVICE_STATUS_BUSY      0x01
 
-YtMessenger::YtMessenger(const char* dev) : IObserver(), YtThread("YtMessenger"), mFaceResultCallback(NULL)
+YtMessenger::YtMessenger(const char* dev) : IObserver(), YtThread("YtMessenger"), mNGResultCallback(NULL), mStatusCallback(NULL)
 {
     int instanceId = YtDataLinkPullPosix::createInstance(dev);
     YtDataLinkPushPosix::createInstance(YtDataLinkPullPosix::getInstance(instanceId));
@@ -39,16 +39,6 @@ YtMessenger::YtMessenger(const char* dev) : IObserver(), YtThread("YtMessenger")
 YtMessenger::~YtMessenger()
 {
     YtDataLinkPullPosix::DetachAll(this);
-
-    if ( push != NULL ) {
-        push->exit();
-        delete push;
-    }
-
-    if ( pull != NULL ) {
-        pull->exit();
-        delete pull;
-    }
 
     LOG_D("[YtMessenger] released.\n");
 }
@@ -86,12 +76,20 @@ void *YtMessenger::run()
             // LOG_D("[YtMessenger] Pid %d, tid %ld : recv result\n", getpid(), gettid());
             switch (mMsg->values.result.which_data)
             {
-            case YtResult_faceDetectionResult_tag:
-                if (mFaceResultCallback != NULL)
+                case YtResult_systemStatusResult_tag:
+                    if (mStatusCallback != NULL)
+                    {
+                        mStatusCallback(mMsg);
+                    }
+                    break;
+            }
+            if (VSRESULT_DATAV2(mMsg)->size > 0 &&
+                mMsg->values.result.which_data != YtResult_faceDetectionResult_tag)
+            {
+                if (mNGResultCallback != NULL)
                 {
-                    mFaceResultCallback(mMsg);
+                    mNGResultCallback(mMsg);
                 }
-                break;
             }
             // DispatchMsg(mMsg);
             mMsg = NULL;
@@ -130,12 +128,8 @@ shared_ptr<YtMsg> YtMessenger::SendMsg(shared_ptr<YtMsg> message)
     LOG_D("[YtMessenger::SendMsg] request sent, wait for response.\n");
 
     // wait for response
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += TIMEOUT;
-    ts.tv_nsec = 0;
     shared_ptr<YtMsg> response;
-    int ret = sem_timedwait(&mSengMsgResponseSem, &ts);
+    int ret = sem_timedwait(&mSengMsgResponseSem, TIMEOUT*1000);
     if ( ret == 0 )
     {
         response = mResponse;
@@ -209,10 +203,12 @@ void YtMessenger::Update(int instanceId, shared_ptr<YtMsg> message)
         if ( svalProcessing == 0 ) {// is processing
             // too fast, drop result
             // PostFailResponseMsg(DEVICE_STATUS_BUSY);
-            LOG_W("[YtMessenger] dropped result\n");
+            LOG_D("[YtMessenger] dropped result\n");
         }
         else { // idle
+            sem_wait(&mMsgProcessingSem); // wait for processing resource
             mMsg = message;
+            sem_post(&mMsgProcessingSem); // wait for processing resource
             sem_post(&mMsgReadySem);
             LOG_D("[YtMessenger] Pid %d, tid %ld : msg is ready\n", getpid(), gettid());
         }
@@ -261,12 +257,16 @@ void YtMessenger::RegisterCallback(int32_t func, RpcCallback callback)
     LOG_D("[VSWrapper] add callback for func: %d.\n", func);
 }
 
-bool YtMessenger::SendFilePart(std::string pathVS, size_t totalLength, const uint8_t *blobBuf, size_t length, size_t offset)
+bool YtMessenger::SendFilePart(std::string pathVS, size_t totalLength, const uint8_t *blobBuf, size_t length, size_t offset, std::string auth)
 {
     VSRPC(request, uploadFile, filePart, response);
     strcpy(VSRPC_PARAM(request).filePart.path, pathVS.c_str());
     VSRPC_PARAM(request).filePart.totalLength = totalLength;
     VSRPC_PARAM(request).filePart.offset = offset;
+    bool hasAuth= (auth != "") ? true : false;
+    request->values.rpc.has_auth = hasAuth;
+    if (hasAuth)
+        memcpy(request->values.rpc.auth, auth.c_str(), auth.length());
     size_t len = ((size_t)length + offsetof(pb_bytes_array_t, bytes));
     VSRPC_PARAM(request).filePart.data = (pb_bytes_array_t*)malloc(len);//(pb_bytes_array_t*)malloc(PB_BYTES_ARRAY_T_ALLOCSIZE(MAX_BLOB_BUF));
     VSRPC_PARAM(request).filePart.data->size = length;
@@ -281,7 +281,7 @@ bool YtMessenger::SendFilePart(std::string pathVS, size_t totalLength, const uin
     return ret;
 }
 
-bool YtMessenger::SendBuffer(std::string pathVS, size_t totalLength, const uint8_t *blobBuf)
+bool YtMessenger::SendBuffer(std::string pathVS, size_t totalLength, const uint8_t *blobBuf, std::string auth)
 {
     // Write in a loop to exhaust the buffer
     off_t current_offset= 0;
@@ -290,7 +290,7 @@ bool YtMessenger::SendBuffer(std::string pathVS, size_t totalLength, const uint8
 
     while(remaining > 0){
         size_to_transmit = remaining > MAX_BLOB_BUF ? MAX_BLOB_BUF : remaining;
-        if ( !SendFilePart(pathVS, totalLength, blobBuf + current_offset, size_to_transmit, current_offset) ) {
+        if ( !SendFilePart(pathVS, totalLength, blobBuf + current_offset, size_to_transmit, current_offset, auth) ) {
             LOG_E("[MsgProcessor] failed to send blob package\n");
             return false;
         }
@@ -306,29 +306,30 @@ bool YtMessenger::SendBuffer(std::string pathVS, size_t totalLength, const uint8
 //
 //}
 
-bool YtMessenger::SendFile(std::string pathHost, std::string path)
+bool YtMessenger::SendFile(std::string pathHost, std::string path, std::string auth)
 {
-    int fd = open(pathHost.c_str(), O_RDONLY);
-    if(fd <= 0) {
+    FILE *fin = fopen(pathHost.c_str(), "rb");
+    if(!fin) {
         LOG_E("open file error");
         return false;
     }
 
-    off_t totalLength = lseek(fd, 0, SEEK_END);
+    fseek(fin, 0, SEEK_END);
+    off_t totalLength = ftell(fin);
     uint8_t *blobBuf = (uint8_t*) malloc(totalLength);
-    lseek(fd, 0, 0);
+    fseek(fin, 0, SEEK_SET);
     LOG_D("Reading file: %s (size %d)\n", pathHost.c_str(), (int)totalLength);
 
-    int ret_read = read(fd, blobBuf, totalLength);
+    int ret_read = fread(blobBuf, 1, totalLength, fin);
     if(ret_read <= 0 || ret_read != totalLength) {
         LOG_E("failed to read file: %s\n", pathHost.c_str());
         return false;
     }
 
     LOG_D("Closing file\n" );
-    close(fd);
+    fclose(fin);
 
-    if ( SendBuffer(path, totalLength, blobBuf) ) {
+    if ( SendBuffer(path, totalLength, blobBuf, auth) ) {
         free(blobBuf);
         return true;
     }
@@ -337,7 +338,11 @@ bool YtMessenger::SendFile(std::string pathHost, std::string path)
     return false;
 }
 
-void YtMessenger::RegisterOnFaceResult(OnResult callback)
+void YtMessenger::RegisterOnStatus(OnResultCallback callback)
 {
-    mFaceResultCallback = callback;
+    mStatusCallback = callback;
+}
+void YtMessenger::RegisterOnResult(OnResultCallback callback)
+{
+    mNGResultCallback = callback;
 }
