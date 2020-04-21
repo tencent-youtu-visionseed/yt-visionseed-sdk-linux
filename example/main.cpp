@@ -8,6 +8,16 @@
 
 YtVisionSeed *visionseed;
 
+//获取状态
+void OnStatus(shared_ptr<YtMsg> message)
+{
+    if (VSRESULT_DATA(message).systemStatusResult.heartBeatId == 0)
+    {
+        printf("[VisionSeed] boot done!\n");
+    }
+}
+
+//获取结果
 void OnResult(shared_ptr<YtMsg> message)
 {
     if (message)
@@ -81,15 +91,9 @@ void OnResult(shared_ptr<YtMsg> message)
                 *         3   2   1
                 */
                 // 从接收到的关键点构造shape结构体,填入关键点
-                if (points.count == 90)
+                YtFaceShape shape;
+                if (GetYtFaceShape(points, shape))
                 {
-                    YtFaceShape shape;
-                    cv::Point2f *raw = (cv::Point2f *)&shape;
-                    for (size_t i = 0; i < points.count; i++)
-                    {
-                        raw[i].x = points.p[i].x;
-                        raw[i].y = points.p[i].y;
-                    }
                     float leftEyeOpeness = cv::norm(shape.leftEye[6] - shape.leftEye[2]) / cv::norm(shape.leftEye[0] - shape.leftEye[4]);
                     printf("leftEyeOpeness: %0.3f\n", leftEyeOpeness);
                 }
@@ -104,7 +108,7 @@ int main(int argc, char **argv)
 
     //注册结果获取接口
     visionseed->RegisterOnResult(OnResult);
-    // visionseed->RegisterOnStatus(OnResult);
+    visionseed->RegisterOnStatus(OnStatus);
     while ( true )
     {
         usleep(1000);

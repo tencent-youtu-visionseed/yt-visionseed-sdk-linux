@@ -83,7 +83,8 @@ void *YtMessenger::run()
                     }
                     break;
             }
-            if (VSRESULT_DATAV2(mMsg)->size > 0 &&
+            if (VSRESULT_DATAV2(mMsg) != NULL &&
+                VSRESULT_DATAV2(mMsg)->size > 0 &&
                 mMsg->values.result.which_data != YtResult_faceDetectionResult_tag)
             {
                 if (mNGResultCallback != NULL)

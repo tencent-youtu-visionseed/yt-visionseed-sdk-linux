@@ -17,31 +17,23 @@
 #define YT_FACE_SHAPE_SIZE (YT_FACE_ALIGMENT_IDX_PUPIL + YT_FACE_SHAPE_SIZE_PUPIL)
 
 
-int GetYtFaceShape(Face *face, YtFaceShape &shape)
+int GetYtFaceShape(YtVisionSeedResultTypePoints &points, YtFaceShape &shape)
 {
-    if (face->has_shape)
+    if (points.count == 90)
     {
-        if (sizeof(YtFaceShape) != YT_FACE_SHAPE_SIZE*(sizeof(cv::Point2f)+sizeof(float))+sizeof(float))
-        {
-            LOG_E("[GetYtFaceShape] %lu != %lu\n", (long)sizeof(YtFaceShape), (long)(YT_FACE_SHAPE_SIZE*(sizeof(cv::Point2f)+sizeof(float))+sizeof(float)));
-            return 0;
-        }
         cv::Point2f *raw = (cv::Point2f *)&shape;
-        for (size_t i = 0; i < face->shape.x_count; i++)
+        for (size_t i = 0; i < points.count; i++)
         {
-            raw[i].x = face->shape.x[i];
-            raw[i].y = face->shape.y[i];
+            raw[i].x = points.p[i].x;
+            raw[i].y = points.p[i].y;
+        }
+        float* pVisibility = (((float*)&shape)+points.count*2);
+        for (size_t i = 0; i < points.count; i++)
+        {
+            pVisibility[i] = 1;
         }
         //
-        int ptsNum = face->shape.x_count;
-        float* pVisibility = (((float*)&shape)+ptsNum*2);
-        for (size_t i = 0; i < ptsNum; i++)
-        {
-            pVisibility[i] = face->shape.visibility[i];
-        }
-        //
-        shape.confidence = face->shape.confidence;
-
+        shape.confidence = 1;
         return 1;
     }
     return 0;

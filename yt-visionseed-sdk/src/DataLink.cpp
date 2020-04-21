@@ -669,12 +669,16 @@ void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t 
 }
 void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeString &result)
 {
+#if defined(YTMSG_FULL)
     uint16_t conf = result.conf*65535;
     uint32_t len = strlen(result.p);
     uint8_t buf[len + 1 + 2] = {(uint8_t)(conf), (uint8_t)(conf >> 8)};
     memcpy(buf + 2, result.p, len);
     buf[2 + len] = 0;
     addResultRaw(data, size, path, path_len, YT_RESULT_STRING, buf, len + 1 + 2);
+#else
+    LOG_E("[E] Not implemented!\n");
+#endif
 }
 void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypePoints &result)
 {

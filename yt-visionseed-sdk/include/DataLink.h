@@ -64,7 +64,11 @@
 // RPC Result
 #define VSRESULT_DATA_TAG(x)      YtResult_##x##_tag
 #define VSRESULT_DATA(vs_result) (vs_result)->values.result.data
-#define VSRESULT_DATAV2(vs_result) ((pb_bytes_array_t*)&((vs_result)->values.result.dataV2))
+#if defined(YTMSG_FULL)
+    #define VSRESULT_DATAV2(vs_result) ((pb_bytes_array_t*)&((vs_result)->values.result.dataV2))
+#else
+    #define VSRESULT_DATAV2(vs_result) ((pb_bytes_array_t*)((vs_result)->values.result.dataV2))
+#endif
 #define VSRESULT_DATAV2_SIZE(vs_result) sizeof((vs_result)->values.result.dataV2.bytes)
 #define VSRESULT(vs_result) (vs_result)->values.result
 

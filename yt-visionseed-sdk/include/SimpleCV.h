@@ -4,7 +4,6 @@
 
 #ifndef _SIMPLE_CV_H_
 #define _SIMPLE_CV_H_
-#include <vector>
 
 #ifndef DISABLE_SIMPLE_CV
 

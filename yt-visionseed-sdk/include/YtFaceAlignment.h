@@ -104,6 +104,6 @@ struct YtFaceShape
 };
 #pragma pack()
 
-int GetYtFaceShape(Face *face, YtFaceShape &shape);
+int GetYtFaceShape(YtVisionSeedResultTypePoints &points, YtFaceShape &shape);
 
 #endif
