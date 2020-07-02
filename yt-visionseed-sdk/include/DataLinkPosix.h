@@ -74,6 +74,7 @@ public:
     virtual void sendYtMsgAsync(shared_ptr<YtMsg> msg);
     virtual void sendResponseAsync(YtRpcResponse_ReturnCode code, bool has_sequenceId, int32_t sequenceId);
     virtual void sendResponseWithIntDataAsync(YtRpcResponse_ReturnCode code, int intData, bool has_sequenceId, int32_t sequenceId);
+    virtual void sendResponseWithStrDataAsync(YtRpcResponse_ReturnCode code, std::string strData, bool has_sequenceId, int32_t sequenceId);
 protected:
     YtDataLink *mDev;
     static vector<YtDataLinkPushPosix *> mInstance;

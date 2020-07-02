@@ -52,6 +52,7 @@ public:
     bool SetCamManualExposure(CameraID camId, int32_t timeUs, int32_t gain);
     bool SetFlasher(int32_t flasherIR, int32_t flasherWhite);
     void SetFlasherAsync(int32_t flasherIR, int32_t flasherWhite);
+    bool SetDebugDrawing(int32_t drawing);
     // bool SetCameraAIAbility(int32_t ability); // !!! Not implemented.
     // bool TakePicture(CameraID camId, int32_t mode, std::string pathHost);
 

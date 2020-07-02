@@ -20,6 +20,16 @@
 #include <Flic.h>
 #endif
 
+#if !defined(strlcpy)
+size_t strlcpy(char *dst, const char *src, size_t size)
+{
+	size_t srclen = strlen(src);
+	strncpy(dst, src, min(size, srclen));
+	dst[size - 1] = 0;
+	return srclen;
+}
+#endif
+
 #if defined(ESP32)
 	#include "DataLinkESP32.h"
 #elif defined(STM32)
@@ -181,6 +191,22 @@ void YtDataLinkPushPosix::sendResponseWithIntDataAsync(YtRpcResponse_ReturnCode 
         msg->which_values = YtMsg_response_tag;
         msg->values.response.which_data = YtRpcResponse_intData_tag;
         msg->values.response.data.intData = intData;
+
+        msg->values.response.has_sequenceId = has_sequenceId;
+        msg->values.response.sequenceId = sequenceId;
+        msg->values.response.code = code;
+
+        sendYtMsgAsync(msg);
+    }
+}
+void YtDataLinkPushPosix::sendResponseWithStrDataAsync(YtRpcResponse_ReturnCode code, std::string strData, bool has_sequenceId, int32_t sequenceId)
+{
+    std::shared_ptr<YtMsg> msg = YtMsgPool::getInstance()->receive();
+    if (msg)
+    {
+        msg->which_values = YtMsg_response_tag;
+        msg->values.response.which_data = YtRpcResponse_strData_tag;
+        strlcpy(msg->values.response.data.strData, strData.c_str(), sizeof(msg->values.response.data.strData));
 
         msg->values.response.has_sequenceId = has_sequenceId;
         msg->values.response.sequenceId = sequenceId;

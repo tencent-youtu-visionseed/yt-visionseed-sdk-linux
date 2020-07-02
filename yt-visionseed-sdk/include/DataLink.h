@@ -34,9 +34,14 @@
     #define YTDATALINK_RECV_BUF_SIZE 256
     #define YTDATALINK_SEND_BUF_SIZE 256
 #else
+#if defined(ARDUINO_ARCH_AVR)
     #include <avr/pgmspace.h>
     #define CONST const PROGMEM
     #define ACCESS_CONST(x) pgm_read_word(&x)
+#else
+    #define CONST const
+    #define ACCESS_CONST(x) (x)
+#endif
 
     #undef YTMSG_USE_RECV_POOL
     #define YtMsg_size 600

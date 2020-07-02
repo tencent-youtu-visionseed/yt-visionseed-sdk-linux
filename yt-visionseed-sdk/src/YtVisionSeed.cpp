@@ -119,6 +119,13 @@ void YtVisionSeed::SetFlasherAsync(int32_t flasherIR, int32_t flasherWhite)
     VSRPC_CALL_ASYNC(request);
 }
 
+bool YtVisionSeed::SetDebugDrawing(int32_t drawing)
+{
+    VSRPC(request, setDebugDrawing, intParams, response);
+    VSRPC_PARAM(request).intParams = drawing;
+    return VSRPC_CALL(request, response);
+}
+
 // bool YtVisionSeed::TakePicture(CameraID camId, int32_t mode, std::string pathHost)
 // {
 //     VSRPC(request, takeRawPicture, intParams, response);
