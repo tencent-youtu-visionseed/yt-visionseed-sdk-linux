@@ -312,6 +312,20 @@ CONST static uint16_t ccitt_table[256] = {
     0xEF1F, 0xFF3E, 0xCF5D, 0xDF7C, 0xAF9B, 0xBFBA, 0x8FD9, 0x9FF8,
     0x6E17, 0x7E36, 0x4E55, 0x5E74, 0x2E93, 0x3EB2, 0x0ED1, 0x1EF0
 };
+
+ModelPath::ModelPath(int a, int b, int c, int d)
+{
+    len = 0;
+    path[0] = a;
+    path[1] = b;
+    path[2] = c;
+    path[3] = d;
+    if (d < 0) len = 3;
+    if (c < 0) len = 2;
+    if (b < 0) len = 1;
+    if (a < 0) len = 0;
+}
+
 YtDataLink::YtDataLink(YtSerialPortBase *port)
 {
     mStatus = YT_DL_IDLE;
@@ -478,7 +492,7 @@ uint8_t packVarUInt32(uint8_t *&p, uint32_t val)
     return ret;
 }
 
-const uint8_t* YtDataLink::getResult(const uint8_t *buf, uint32_t &ret_len, const uint8_t path[], const uint8_t path_len)
+const uint8_t* YtDataLink::getResult(const uint8_t *buf, uint32_t &ret_len, const class ModelPath &path)
 {
     const uint8_t *p = buf + 1;
     for (size_t i = 0; i < buf[0]; i++)
@@ -491,9 +505,9 @@ const uint8_t* YtDataLink::getResult(const uint8_t *buf, uint32_t &ret_len, cons
         p += 1;
         uint32_t cur_data_len;
         unpackVarUInt32(p, &cur_data_len);
-        if (cur_path_len == path_len)
+        if (cur_path_len == path.len)
         {
-            if (memcmp(p_path, path, path_len) == 0)
+            if (memcmp(p_path, path.path, path.len) == 0)
             {
                 ret_len = cur_data_len;
                 return p;
@@ -516,7 +530,7 @@ void YtDataLink::initDataV2(YtMsg *message)
     data->size = p - buf;
 #endif
 }
-void YtDataLink::addResultRaw(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, YtVisionSeedResultType _type, const uint8_t *content, const uint32_t len)
+void YtDataLink::addResultRaw(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, YtVisionSeedResultType _type, const uint8_t *content, const uint32_t len)
 {
     uint8_t *buf = data->bytes;
     const uint8_t *p = buf + 1;
@@ -538,10 +552,10 @@ void YtDataLink::addResultRaw(pb_bytes_array_t *data, uint32_t size, const uint8
         p += cur_data_len;
     }
     uint8_t *pp = (uint8_t*)p;
-    pp[0] = path_len;
+    pp[0] = path.len;
     pp += 1;
-    memcpy(pp, path, path_len);
-    pp += path_len;
+    memcpy(pp, path.path, path.len);
+    pp += path.len;
     pp[0] = _type;
     pp += 1;
     packVarUInt32(pp, len);
@@ -551,10 +565,10 @@ void YtDataLink::addResultRaw(pb_bytes_array_t *data, uint32_t size, const uint8
     data->size = pp - buf;
     LOG_I("[addResult] cnt=%d, sz=%d / %d\n", buf[0], data->size, size);
 }
-bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeRect *rect, const uint8_t path[], const uint8_t path_len)
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeRect *rect, const class ModelPath &path)
 {
     uint32_t len = 0;
-    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    const uint8_t *p0 = getResult(buf, len, path);
     if (p0 == NULL)
     {
         return false;
@@ -570,10 +584,10 @@ bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeRect *rect,
     if (!unpackInt16(p, len - (p - p0), &rect->h)) return false;
     return true;
 }
-bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeClassification *result, const uint8_t path[], const uint8_t path_len)
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeClassification *result, const class ModelPath &path)
 {
     uint32_t len = 0;
-    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    const uint8_t *p0 = getResult(buf, len, path);
     if (p0 == NULL)
     {
         return false;
@@ -585,10 +599,10 @@ bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeClassificat
     if (!unpackUInt16(p, len - (p - p0), &result->cls)) return false;
     return true;
 }
-bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeArray *result, const uint8_t path[], const uint8_t path_len)
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeArray *result, const class ModelPath &path)
 {
     uint32_t len = 0;
-    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    const uint8_t *p0 = getResult(buf, len, path);
     if (p0 == NULL)
     {
         return false;
@@ -598,10 +612,10 @@ bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeArray *resu
     result->count = len / 4;
     return true;
 }
-bool YtDataLink::getResult(const uint8_t *buf, uint32_t *result, const uint8_t path[], const uint8_t path_len)
+bool YtDataLink::getResult(const uint8_t *buf, uint32_t *result, const class ModelPath &path)
 {
     uint32_t len = 0;
-    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    const uint8_t *p0 = getResult(buf, len, path);
     if (p0 == NULL)
     {
         return false;
@@ -610,10 +624,10 @@ bool YtDataLink::getResult(const uint8_t *buf, uint32_t *result, const uint8_t p
     unpackVarUInt32(p, result);
     return true;
 }
-bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeString *result, const uint8_t path[], const uint8_t path_len)
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeString *result, const class ModelPath &path)
 {
     uint32_t len = 0;
-    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    const uint8_t *p0 = getResult(buf, len, path);
     if (p0 == NULL)
     {
         return false;
@@ -626,10 +640,10 @@ bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypeString *res
     return true;
 }
 
-bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypePoints *result, const uint8_t path[], const uint8_t path_len)
+bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypePoints *result, const class ModelPath &path)
 {
     uint32_t len = 0;
-    const uint8_t *p0 = getResult(buf, len, path, path_len);
+    const uint8_t *p0 = getResult(buf, len, path);
     if (p0 == NULL)
     {
         return false;
@@ -640,7 +654,7 @@ bool YtDataLink::getResult(const uint8_t *buf, YtVisionSeedResultTypePoints *res
     return true;
 }
 
-void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeRect &result)
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypeRect &result)
 {
     uint16_t conf = result.conf*65535;
     uint8_t buf[] = {
@@ -651,23 +665,23 @@ void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t 
         (uint8_t)(result.w), (uint8_t)(result.w >> 8),
         (uint8_t)(result.h), (uint8_t)(result.h >> 8),
     };
-    addResultRaw(data, size, path, path_len, YT_RESULT_RECT, buf, sizeof(buf));
+    addResultRaw(data, size, path, YT_RESULT_RECT, buf, sizeof(buf));
 }
-void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeClassification &result)
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypeClassification &result)
 {
     uint16_t conf = result.conf*65535;
     uint8_t buf[] = {
         (uint8_t)(conf), (uint8_t)(conf >> 8),
         (uint8_t)(result.cls), (uint8_t)(result.cls >> 8),
     };
-    addResultRaw(data, size, path, path_len, YT_RESULT_CLASSIFICATION, buf, sizeof(buf));
+    addResultRaw(data, size, path, YT_RESULT_CLASSIFICATION, buf, sizeof(buf));
 }
-void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeArray &result)
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypeArray &result)
 {
     uint32_t len = result.count * 4;
-    addResultRaw(data, size, path, path_len, YT_RESULT_ARRAY, (const uint8_t *)result.p, len);
+    addResultRaw(data, size, path, YT_RESULT_ARRAY, (const uint8_t *)result.p, len);
 }
-void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeString &result)
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypeString &result)
 {
 #if defined(YTMSG_FULL)
     uint16_t conf = result.conf*65535;
@@ -675,19 +689,19 @@ void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t 
     uint8_t buf[len + 1 + 2] = {(uint8_t)(conf), (uint8_t)(conf >> 8)};
     memcpy(buf + 2, result.p, len);
     buf[2 + len] = 0;
-    addResultRaw(data, size, path, path_len, YT_RESULT_STRING, buf, len + 1 + 2);
+    addResultRaw(data, size, path, YT_RESULT_STRING, buf, len + 1 + 2);
 #else
     LOG_E("[E] Not implemented!\n");
 #endif
 }
-void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypePoints &result)
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypePoints &result)
 {
-    addResultRaw(data, size, path, path_len, YT_RESULT_POINTS, (const uint8_t*)result.p, result.count * 4);
+    addResultRaw(data, size, path, YT_RESULT_POINTS, (const uint8_t*)result.p, result.count * 4);
 }
-void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const uint32_t result)
+void YtDataLink::addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const uint32_t result)
 {
     uint8_t buf[17];
     uint8_t *p = buf;
     uint8_t len = packVarUInt32(p, result);
-    addResultRaw(data, size, path, path_len, YT_RESULT_VARUINT32, buf, len);
+    addResultRaw(data, size, path, YT_RESULT_VARUINT32, buf, len);
 }

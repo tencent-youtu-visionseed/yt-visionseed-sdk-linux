@@ -155,6 +155,14 @@ public:
     virtual int write(void *buffer, size_t len) = 0;
 };
 
+class ModelPath
+{
+public:
+    uint8_t path[4];
+    uint8_t len;
+    ModelPath(int a, int b = -1, int c = -1, int d = -1);
+};
+
 class YtDataLink
 {
 public:
@@ -172,20 +180,20 @@ public:
 #endif
 
     // 结果包解析
-    static const uint8_t* getResult(const uint8_t *buf, uint32_t &ret_len, const uint8_t path[], const uint8_t path_len);
-    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypeRect *result, const uint8_t path[], const uint8_t path_len);
-    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypeClassification *result, const uint8_t path[], const uint8_t path_len);
-    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypeArray *result, const uint8_t path[], const uint8_t path_len);
-    static bool getResult(const uint8_t *buf, uint32_t *result, const uint8_t path[], const uint8_t path_len);
-    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypeString *result, const uint8_t path[], const uint8_t path_len);
-    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypePoints *result, const uint8_t path[], const uint8_t path_len);
-    static void addResultRaw(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, YtVisionSeedResultType _type, const uint8_t *content, const uint32_t len);
-    static void addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeRect &result);
-    static void addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeClassification &result);
-    static void addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeArray &result);
-    static void addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypeString &result);
-    static void addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const YtVisionSeedResultTypePoints &result);
-    static void addResult(pb_bytes_array_t *data, uint32_t size, const uint8_t path[], const uint8_t path_len, const uint32_t result);
+    static const uint8_t* getResult(const uint8_t *buf, uint32_t &ret_len, const class ModelPath &path);
+    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypeRect *result, const class ModelPath &path);
+    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypeClassification *result, const class ModelPath &path);
+    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypeArray *result, const class ModelPath &path);
+    static bool getResult(const uint8_t *buf, uint32_t *result, const class ModelPath &path);
+    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypeString *result, const class ModelPath &path);
+    static bool getResult(const uint8_t *buf, YtVisionSeedResultTypePoints *result, const class ModelPath &path);
+    static void addResultRaw(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, YtVisionSeedResultType _type, const uint8_t *content, const uint32_t len);
+    static void addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypeRect &result);
+    static void addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypeClassification &result);
+    static void addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypeArray &result);
+    static void addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypeString &result);
+    static void addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const YtVisionSeedResultTypePoints &result);
+    static void addResult(pb_bytes_array_t *data, uint32_t size, const class ModelPath &path, const uint32_t result);
     static void initDataV2(YtMsg *message);
     const uint8_t *getPbField(int tag, uint32_t *len);
 

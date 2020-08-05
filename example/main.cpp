@@ -25,31 +25,30 @@ void OnResult(shared_ptr<YtMsg> message)
         if (message->which_values == YtMsg_result_tag &&
             VSRESULT_DATAV2(message)->size > 0)
         {
-            // 从message中提取人脸检测结果，这里的VS_MODEL_FACE_DETECTION==1对应工具中“AI模型配置”标签中人脸检测模型的序号“1”
-            uint8_t vs_path[3] = {VS_MODEL_FACE_DETECTION};
             uint32_t count = 0; // 检测到的人脸数量
-            YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &count, vs_path, 1);
+            // 从message中提取人脸检测结果，这里的VS_MODEL_FACE_DETECTION==1对应工具中“AI模型配置”标签中人脸检测模型的序号“1”
+            YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &count, {VS_MODEL_FACE_DETECTION});
             // visionseed->SetFlasher( count == 0 ? 0 : 50, 0 );
             for (int i = 0; i < min((uint32_t)1, count); i ++)
             {
                 YtVisionSeedResultTypeRect rect;
                 YtVisionSeedResultTypeString faceName = {.conf = 0, .p=0};
-                YtVisionSeedResultTypeArray pose = {.count =0, .p = 0};
+                YtVisionSeedResultTypeArray pose = {.count = 0, .p = 0};
                 YtVisionSeedResultTypePoints points = {.count = 0, .p = 0};
 
-                vs_path[1] = i; // 如果i==0，获取的算法结果为[VS_MODEL_FACE_DETECTION, 0], 即人脸框0。
-                if (!YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &rect, vs_path, 2))
+                // 获取检测框（模型ID路径：人脸检测/index）
+                if (!YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &rect, {VS_MODEL_FACE_DETECTION, i}))
                 {
                     continue;
                 }
-                vs_path[2] = VS_MODEL_FACE_RECOGNITION; // 如果i==0，获取的算法结果为[VS_MODEL_FACE_DETECTION, 0, VS_MODEL_FACE_RECOGNITION]，即人脸框0的识别结果
-                YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &faceName, vs_path, 3);
+                // 获取人脸识别结果（模型ID路径：人脸检测/index/人脸识别）
+                YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &faceName, {VS_MODEL_FACE_DETECTION, i, VS_MODEL_FACE_RECOGNITION});
 
-                vs_path[2] = VS_MODEL_FACE_POSE; // 如果i==0，获取的算法结果为[VS_MODEL_FACE_DETECTION, 0, VS_MODEL_FACE_POSE]，即人脸框0的pose
-                YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &pose, vs_path, 3);
+                // 获取人脸姿态（模型ID路径：人脸检测/index/人脸姿态）
+                YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &pose, {VS_MODEL_FACE_DETECTION, i, VS_MODEL_FACE_POSE});
 
-                vs_path[2] = VS_MODEL_FACE_LANDMARK; // 如果i==0，获取的算法结果为[VS_MODEL_FACE_DETECTION, 0, VS_MODEL_FACE_LANDMARK]，即人脸框0的90个面部关键点
-                YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &points, vs_path, 3);
+                // 获取人脸关键点定位结果（模型ID路径：人脸检测/index/人脸配准）
+                YtDataLink::getResult(VSRESULT_DATAV2(message)->bytes, &points, {VS_MODEL_FACE_DETECTION, i, VS_MODEL_FACE_LANDMARK});
 
                 printf("face: %d/%d\n", (int)(i+1), count);
 
