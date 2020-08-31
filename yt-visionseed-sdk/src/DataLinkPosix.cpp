@@ -341,6 +341,14 @@ void YtThread::exit()
 
 YtSerialPortPosix::YtSerialPortPosix(const char *dev) : YtSerialPortBase(dev)
 {
+#ifdef INC_FREERTOS_H
+    mUpdateSem = xSemaphoreCreateCounting(10, 1);
+#else
+    if (sem_init(&mUpdateSem, 0, 1) != 0)
+    {
+        LOG_E("[YtSerialPortPosix] Error: sem_init failed\n");
+    }
+#endif
 }
 YtSerialPortPosix::~YtSerialPortPosix()
 {
@@ -353,12 +361,19 @@ bool YtSerialPortPosix::isOpen()
 }
 int YtSerialPortPosix::open()
 {
+    sem_wait(&mUpdateSem);
+    if (mPortFd >= 0)
+    {
+        sem_post(&mUpdateSem);
+        return 1;
+    }
     mPortFd = ::open(mDev, O_RDWR);
     if (mPortFd < 0) {
         #ifndef INC_FREERTOS_H
             LOG_E("[YtDataLink] Error opening %s, %d\n", mDev, errno);
         #endif
         usleep(100000);
+        sem_post(&mUpdateSem);
         return 0;
     }
     //有一些特殊的usb-serial设备（比如stm32 usb-serial）默认会设置标志位，将发送的0x0a变成0x0d, 0x0a
@@ -380,7 +395,8 @@ int YtSerialPortPosix::open()
         tcsetattr(mPortFd, TCSANOW, &options);
     }
 #endif
-    LOG_D("[YtDataLink] %s opened: %d\n", mDev, mPortFd);
+    LOG_E("[YtDataLink] %s opened: %d\n", mDev, mPortFd);
+    sem_post(&mUpdateSem);
     return 1;
 }
 int YtSerialPortPosix::close()
@@ -421,7 +437,7 @@ int YtSerialPortPosix::read(void *buffer, size_t len)
 #endif
     if (rv < 0)
     {
-        LOG_E("[serial] read error %d!", rv);
+        LOG_E("[serial] read error %d!\n", rv);
         close();
     }
     // //echo data for test

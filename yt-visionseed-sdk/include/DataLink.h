@@ -161,6 +161,8 @@ public:
     uint8_t path[4];
     uint8_t len;
     ModelPath(int a, int b = -1, int c = -1, int d = -1);
+    uint8_t& operator[](int index);
+    void add(int a);
 };
 
 class YtDataLink

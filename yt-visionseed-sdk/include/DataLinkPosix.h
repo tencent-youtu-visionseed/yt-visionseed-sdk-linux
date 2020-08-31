@@ -39,6 +39,8 @@ protected:
 };
 class YtSerialPortPosix : public YtSerialPortBase
 {
+protected:
+    sem_t mUpdateSem;
 public:
     YtSerialPortPosix(const char *dev);
     virtual ~YtSerialPortPosix();

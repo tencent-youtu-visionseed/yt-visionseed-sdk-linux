@@ -325,6 +325,18 @@ ModelPath::ModelPath(int a, int b, int c, int d)
     if (b < 0) len = 1;
     if (a < 0) len = 0;
 }
+uint8_t& ModelPath::operator[](int index)
+{
+    if (index >= len)
+    {
+        LOG_E("[ModelPath] index out of range\n");
+    }
+    return path[index];
+}
+void ModelPath::add(int a)
+{
+    path[len ++] = a;
+}
 
 YtDataLink::YtDataLink(YtSerialPortBase *port)
 {
